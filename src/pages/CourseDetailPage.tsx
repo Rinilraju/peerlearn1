@@ -1,10 +1,114 @@
-import { useParams } from 'react-router-dom';
-import { COURSES } from '../data/mockData';
-import { Star, Users, Clock, CheckCircle, Share2, Heart } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { Star, Users, CheckCircle, Share2, Heart } from 'lucide-react';
+import api from '../api';
+
+type CourseDetail = {
+    id: string;
+    title: string;
+    description: string;
+    price: number | string;
+    thumbnail?: string;
+    instructor_name?: string;
+};
 
 export function CourseDetailPage() {
     const { id } = useParams<{ id: string }>();
-    const course = COURSES.find(c => c.id === id);
+    const [searchParams] = useSearchParams();
+    const [course, setCourse] = useState<CourseDetail | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [isEnrolled, setIsEnrolled] = useState(false);
+    const [isPaying, setIsPaying] = useState(false);
+    const [statusMessage, setStatusMessage] = useState('');
+
+    useEffect(() => {
+        if (!id) {
+            return;
+        }
+
+        let active = true;
+        const loadCourse = async () => {
+            try {
+                const courseRes = await api.get(`/courses/${id}`);
+                if (!active) {
+                    return;
+                }
+                setCourse(courseRes.data);
+
+                const token = localStorage.getItem('token');
+                if (token) {
+                    const [enrollmentRes] = await Promise.all([
+                        api.get(`/courses/${id}/enrollment`),
+                        api.post('/recommendations/track', { courseId: id, interactionType: 'view' }),
+                    ]);
+                    if (active) {
+                        setIsEnrolled(Boolean(enrollmentRes.data?.enrolled));
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to fetch course details:', error);
+            } finally {
+                if (active) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        loadCourse();
+        return () => {
+            active = false;
+        };
+    }, [id]);
+
+    useEffect(() => {
+        const paymentState = searchParams.get('payment');
+        const sessionId = searchParams.get('session_id');
+        if (paymentState === 'cancelled') {
+            setStatusMessage('Payment cancelled. You can try again.');
+            return;
+        }
+        if (paymentState === 'success' && sessionId) {
+            api.post('/payments/confirm', { sessionId })
+                .then(() => {
+                    setIsEnrolled(true);
+                    setStatusMessage('Payment successful. You are now enrolled.');
+                })
+                .catch((error) => {
+                    console.error('Failed to confirm payment:', error);
+                    setStatusMessage('Payment succeeded but enrollment confirmation failed. Refresh to retry.');
+                });
+        }
+    }, [searchParams]);
+
+    const startCheckout = async () => {
+        if (!id) {
+            return;
+        }
+        setIsPaying(true);
+        setStatusMessage('');
+        try {
+            const response = await api.post('/payments/create-checkout-session', { courseId: id });
+            const checkoutUrl = response.data?.checkoutUrl;
+            if (checkoutUrl) {
+                window.location.href = checkoutUrl;
+                return;
+            }
+            setStatusMessage('Failed to create checkout session.');
+        } catch (error) {
+            console.error('Checkout failed:', error);
+            setStatusMessage('Checkout failed. Make sure you are logged in and Stripe keys are configured on backend.');
+        } finally {
+            setIsPaying(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="container mx-auto px-4 py-8 text-center">
+                <p>Loading course...</p>
+            </div>
+        );
+    }
 
     if (!course) {
         return (
@@ -13,6 +117,9 @@ export function CourseDetailPage() {
             </div>
         );
     }
+
+    const price = parseFloat(String(course.price || 0)) || 0;
+    const image = course.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200&auto=format&fit=crop&q=60';
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -25,23 +132,23 @@ export function CourseDetailPage() {
                         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                             <div className="flex items-center space-x-1">
                                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                <span className="font-medium text-foreground">{course.rating}</span>
-                                <span>({course.reviews} reviews)</span>
+                                <span className="font-medium text-foreground">4.5</span>
+                                <span>(new course)</span>
                             </div>
                             <div className="flex items-center space-x-1">
                                 <Users className="h-4 w-4" />
-                                <span>{course.enrolled} students</span>
+                                <span>Live enrollment enabled</span>
                             </div>
                             <div className="flex items-center space-x-1">
                                 <span className="font-medium text-foreground">Created by</span>
-                                <span>{course.instructor}</span>
+                                <span>{course.instructor_name || 'PeerLearn Instructor'}</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="aspect-video rounded-lg overflow-hidden bg-muted">
                         <img
-                            src={course.image}
+                            src={image}
                             alt={course.title}
                             className="w-full h-full object-cover"
                         />
@@ -53,7 +160,7 @@ export function CourseDetailPage() {
                             {[1, 2, 3, 4, 5, 6].map((i) => (
                                 <div key={i} className="flex items-start space-x-2">
                                     <CheckCircle className="h-5 w-5 text-primary shrink-0" />
-                                    <span className="text-sm">Master the core concepts and advanced techniques in this field.</span>
+                                    <span className="text-sm">Master practical concepts through guided lessons and projects.</span>
                                 </div>
                             ))}
                         </div>
@@ -63,7 +170,7 @@ export function CourseDetailPage() {
                 <div className="lg:col-span-1">
                     <div className="sticky top-24 p-6 rounded-lg border bg-card shadow-sm space-y-6">
                         <div className="flex justify-between items-center">
-                            <span className="text-3xl font-bold">${course.price}</span>
+                            <span className="text-3xl font-bold">${price.toFixed(2)}</span>
                             <div className="flex space-x-2">
                                 <button className="p-2 rounded-full hover:bg-muted transition-colors">
                                     <Share2 className="h-5 w-5 text-muted-foreground" />
@@ -74,9 +181,26 @@ export function CourseDetailPage() {
                             </div>
                         </div>
 
-                        <button className="w-full py-3 px-4 bg-primary text-primary-foreground rounded-md font-bold hover:bg-primary/90 transition-colors">
-                            Enroll Now
-                        </button>
+                        {isEnrolled ? (
+                            <Link
+                                to="/dashboard"
+                                className="block w-full text-center py-3 px-4 bg-primary text-primary-foreground rounded-md font-bold hover:bg-primary/90 transition-colors"
+                            >
+                                Go to Dashboard
+                            </Link>
+                        ) : (
+                            <button
+                                onClick={startCheckout}
+                                disabled={isPaying}
+                                className="w-full py-3 px-4 bg-primary text-primary-foreground rounded-md font-bold hover:bg-primary/90 transition-colors disabled:opacity-60"
+                            >
+                                {isPaying ? 'Redirecting to Checkout...' : 'Enroll Now'}
+                            </button>
+                        )}
+
+                        {statusMessage && (
+                            <p className="text-sm text-muted-foreground">{statusMessage}</p>
+                        )}
 
                         <div className="space-y-4 text-sm">
                             <div className="flex justify-between py-2 border-b">

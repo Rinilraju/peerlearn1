@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { Pool } = require('pg');
 
 dotenv.config();
 
@@ -39,10 +38,14 @@ db.pool.connect()
 const authRoutes = require('./routes/auth');
 const doubtRoutes = require('./routes/doubts');
 const courseRoutes = require('./routes/courses');
+const recommendationRoutes = require('./routes/recommendations');
+const paymentRoutes = require('./routes/payments');
 
 app.use('/auth', authRoutes);
 app.use('/doubts', doubtRoutes);
 app.use('/courses', courseRoutes);
+app.use('/recommendations', recommendationRoutes);
+app.use('/payments', paymentRoutes);
 
 app.get('/', (req, res) => {
     res.send('PeerLearn Backend Running');
@@ -64,25 +67,34 @@ const io = require('socket.io')(server, {
 io.on('connection', (socket) => {
     console.log('New client connected', socket.id);
 
-    socket.on('disconnect', () => {
-        console.log('Client disconnected', socket.id);
+    socket.on('join-room', (roomId) => {
+        const normalizedRoomId = String(roomId || '');
+        if (!normalizedRoomId) {
+            return;
+        }
+
+        socket.join(normalizedRoomId);
+        socket.data.roomId = normalizedRoomId;
+
+        const clientsInRoom = io.sockets.adapter.rooms.get(normalizedRoomId) || new Set();
+        const otherSocketIds = Array.from(clientsInRoom).filter((id) => id !== socket.id);
+        socket.emit('room-users', otherSocketIds);
+        socket.to(normalizedRoomId).emit('user-joined-room', socket.id);
     });
 
-    // Signaling for WebRTC
-    socket.on('join-room', (roomId, userId) => {
-        socket.join(roomId);
-        socket.to(roomId).emit('user-connected', userId);
+    socket.on('sending-signal', ({ userToSignal, signal }) => {
+        io.to(userToSignal).emit('user-joined', { signal, callerID: socket.id });
+    });
 
-        socket.on('sending-signal', ({ userToSignal, callerID, signal }) => {
-            io.to(userToSignal).emit('user-joined', { signal, callerID });
-        });
+    socket.on('returning-signal', ({ callerID, signal }) => {
+        io.to(callerID).emit('receiving-returned-signal', { signal, id: socket.id });
+    });
 
-        socket.on('returning-signal', ({ signal, callerID }) => {
-            io.to(callerID).emit('receiving-returned-signal', { signal, id: socket.id });
-        });
-
-        socket.on('disconnect', () => {
-            socket.to(roomId).emit('user-disconnected', userId);
-        });
+    socket.on('disconnect', () => {
+        const roomId = socket.data.roomId;
+        if (roomId) {
+            socket.to(roomId).emit('user-left', socket.id);
+        }
+        console.log('Client disconnected', socket.id);
     });
 });

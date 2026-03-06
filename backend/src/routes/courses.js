@@ -35,6 +35,39 @@ router.get('/my-courses', authenticateToken, async (req, res) => {
     }
 });
 
+// Get courses enrolled by current user
+router.get('/enrolled', authenticateToken, async (req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT c.*, u.name AS instructor_name, e.enrolled_at
+             FROM enrollments e
+             INNER JOIN courses c ON c.id = e.course_id
+             LEFT JOIN users u ON c.instructor_id = u.id
+             WHERE e.user_id = $1
+             ORDER BY e.enrolled_at DESC`,
+            [req.user.id]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Check if current user is enrolled in a course
+router.get('/:id/enrollment', authenticateToken, async (req, res) => {
+    try {
+        const result = await db.query(
+            'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
+            [req.user.id, req.params.id]
+        );
+        res.json({ enrolled: result.rows.length > 0 });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // Get course by ID
 router.get('/:id', async (req, res) => {
     try {

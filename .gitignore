@@ -1,1 +1,10 @@
 node_modules
+dist
+.vercel
+_source_peerlearn
+*.log
+backend/.env
+run_frontend.out.log
+run_frontend.err.log
+backend/run_backend.out.log
+backend/run_backend.err.log
