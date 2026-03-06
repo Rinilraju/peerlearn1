@@ -1,8 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
-const { sendVerificationEmail } = require('../utils/email');
 
 const router = express.Router();
 const db = require('../db');
@@ -20,22 +18,11 @@ router.post('/signup', async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-        const newUser = await db.query(
-            'INSERT INTO users (name, email, password, verification_code) VALUES ($1, $2, $3, $4) RETURNING id, email',
-            [name, email, hashedPassword, verificationCode]
+        await db.query(
+            'INSERT INTO users (name, email, password, is_verified, verification_code) VALUES ($1, $2, $3, TRUE, NULL) RETURNING id, email',
+            [name, email, hashedPassword]
         );
-
-        // Send email
-        await sendVerificationEmail(email, verificationCode);
-        // console.log(`Verification Code for ${email}: ${verificationCode}`); // Log for testing
-
-        const response = { message: 'User created. Please check your email for verification code.' };
-        if (process.env.EXPOSE_VERIFICATION_CODE === 'true') {
-            response.verificationCode = verificationCode;
-        }
-        res.status(201).json(response);
+        res.status(201).json({ message: 'User created successfully. You can now login.' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
@@ -44,7 +31,7 @@ router.post('/signup', async (req, res) => {
 
 // Verify
 router.post('/verify', async (req, res) => {
-    const { email, code } = req.body;
+    const { email } = req.body;
     try {
         const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
         if (userResult.rows.length === 0) {
@@ -53,11 +40,7 @@ router.post('/verify', async (req, res) => {
 
         const user = userResult.rows[0];
         if (user.is_verified) {
-            return res.status(400).json({ message: 'User already verified' });
-        }
-
-        if (user.verification_code !== code) {
-            return res.status(400).json({ message: 'Invalid code' });
+            return res.json({ message: 'User already verified.' });
         }
 
         await db.query('UPDATE users SET is_verified = TRUE, verification_code = NULL WHERE id = $1', [user.id]);
@@ -79,7 +62,7 @@ router.post('/login', async (req, res) => {
 
         const user = userResult.rows[0];
         if (!user.is_verified) {
-            return res.status(400).json({ message: 'Please verify your email first' });
+            await db.query('UPDATE users SET is_verified = TRUE, verification_code = NULL WHERE id = $1', [user.id]);
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
