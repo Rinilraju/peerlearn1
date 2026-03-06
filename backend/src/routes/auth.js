@@ -13,6 +13,7 @@ function normalizeEmail(email) {
 router.post('/signup', async (req, res) => {
     const { name, email, password } = req.body;
     const normalizedEmail = normalizeEmail(email);
+    const normalizedPassword = String(password || '').trim();
     const fs = require('fs');
     fs.appendFileSync('server_debug.log', `Signup attempt for: ${normalizedEmail}\n`);
     try {
@@ -22,7 +23,7 @@ router.post('/signup', async (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(normalizedPassword, 10);
         await db.query(
             'INSERT INTO users (name, email, password, is_verified, verification_code) VALUES ($1, $2, $3, TRUE, NULL) RETURNING id, email',
             [name, normalizedEmail, hashedPassword]
@@ -61,6 +62,7 @@ router.post('/verify', async (req, res) => {
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     const normalizedEmail = normalizeEmail(email);
+    const submittedPassword = String(password || '');
     try {
         const userResult = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [normalizedEmail]);
         if (userResult.rows.length === 0) {
@@ -72,7 +74,10 @@ router.post('/login', async (req, res) => {
             await db.query('UPDATE users SET is_verified = TRUE, verification_code = NULL WHERE id = $1', [user.id]);
         }
 
-        const isMatch = await bcrypt.compare(password, user.password);
+        let isMatch = await bcrypt.compare(submittedPassword, user.password);
+        if (!isMatch && submittedPassword.trim() !== submittedPassword) {
+            isMatch = await bcrypt.compare(submittedPassword.trim(), user.password);
+        }
         if (!isMatch) {
             return res.status(400).json({ message: 'Invalid credentials' });
         }
