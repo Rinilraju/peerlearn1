@@ -31,7 +31,11 @@ router.post('/signup', async (req, res) => {
         await sendVerificationEmail(email, verificationCode);
         // console.log(`Verification Code for ${email}: ${verificationCode}`); // Log for testing
 
-        res.status(201).json({ message: 'User created. Please check your email for verification code.' });
+        const response = { message: 'User created. Please check your email for verification code.' };
+        if (process.env.EXPOSE_VERIFICATION_CODE === 'true') {
+            response.verificationCode = verificationCode;
+        }
+        res.status(201).json(response);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
