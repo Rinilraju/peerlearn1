@@ -5,14 +5,19 @@ const jwt = require('jsonwebtoken');
 const router = express.Router();
 const db = require('../db');
 
+function normalizeEmail(email) {
+    return String(email || '').trim().toLowerCase();
+}
+
 // Signup
 router.post('/signup', async (req, res) => {
     const { name, email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
     const fs = require('fs');
-    fs.appendFileSync('server_debug.log', `Signup attempt for: ${email}\n`);
+    fs.appendFileSync('server_debug.log', `Signup attempt for: ${normalizedEmail}\n`);
     try {
         // Check if user exists
-        const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+        const userResult = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [normalizedEmail]);
         if (userResult.rows.length > 0) {
             return res.status(400).json({ message: 'User already exists' });
         }
@@ -20,7 +25,7 @@ router.post('/signup', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         await db.query(
             'INSERT INTO users (name, email, password, is_verified, verification_code) VALUES ($1, $2, $3, TRUE, NULL) RETURNING id, email',
-            [name, email, hashedPassword]
+            [name, normalizedEmail, hashedPassword]
         );
         res.status(201).json({ message: 'User created successfully. You can now login.' });
     } catch (error) {
@@ -32,8 +37,9 @@ router.post('/signup', async (req, res) => {
 // Verify
 router.post('/verify', async (req, res) => {
     const { email } = req.body;
+    const normalizedEmail = normalizeEmail(email);
     try {
-        const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+        const userResult = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [normalizedEmail]);
         if (userResult.rows.length === 0) {
             return res.status(400).json({ message: 'User not found' });
         }
@@ -54,8 +60,9 @@ router.post('/verify', async (req, res) => {
 // Login
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
     try {
-        const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+        const userResult = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [normalizedEmail]);
         if (userResult.rows.length === 0) {
             return res.status(400).json({ message: 'Invalid credentials' });
         }
@@ -156,8 +163,9 @@ router.put('/profile', async (req, res) => {
 // Forgot Password
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
+    const normalizedEmail = normalizeEmail(email);
     try {
-        const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+        const userResult = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [normalizedEmail]);
         if (userResult.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -167,13 +175,13 @@ router.post('/forgot-password', async (req, res) => {
 
         await db.query(
             'UPDATE users SET reset_password_code = $1, reset_password_expires = $2 WHERE email = $3',
-            [code, expires, email]
+            [code, expires, normalizedEmail]
         );
 
         // In a real app, send email here
-        console.log(`Reset Password Code for ${email}: ${code}`);
+        console.log(`Reset Password Code for ${normalizedEmail}: ${code}`);
         const fs = require('fs');
-        fs.appendFileSync('server_debug.log', `Reset Code for ${email}: ${code}\n`);
+        fs.appendFileSync('server_debug.log', `Reset Code for ${normalizedEmail}: ${code}\n`);
 
         res.json({ message: 'Reset code sent to your email.' });
     } catch (error) {
@@ -185,8 +193,9 @@ router.post('/forgot-password', async (req, res) => {
 // Reset Password
 router.post('/reset-password', async (req, res) => {
     const { email, code, newPassword } = req.body;
+    const normalizedEmail = normalizeEmail(email);
     try {
-        const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+        const userResult = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [normalizedEmail]);
         if (userResult.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
