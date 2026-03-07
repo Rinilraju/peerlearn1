@@ -41,7 +41,9 @@ export function SessionsPage() {
     const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
     const [students, setStudents] = useState<Student[]>([]);
     const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
-    const [scheduleDateTime, setScheduleDateTime] = useState('');
+    const [scheduleDate, setScheduleDate] = useState('');
+    const [scheduleHour, setScheduleHour] = useState('09');
+    const [scheduleMinute, setScheduleMinute] = useState('00');
     const [sessions, setSessions] = useState<SessionItem[]>([]);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -113,19 +115,22 @@ export function SessionsPage() {
     }, [chatCourseId, selectedPeerId]);
 
     const scheduleSession = async () => {
-        if (!selectedCourseId || !selectedStudentId || !scheduleDateTime) {
+        if (!selectedCourseId || !selectedStudentId || !scheduleDate) {
             setStatus('Select course, student, and schedule time.');
             return;
         }
+        const scheduledAt = new Date(`${scheduleDate}T${scheduleHour}:${scheduleMinute}:00`).toISOString();
         try {
             await api.post('/sessions', {
                 courseId: selectedCourseId,
                 studentId: selectedStudentId,
-                scheduledAt: scheduleDateTime,
+                scheduledAt,
                 durationMinutes: 60,
             });
             setStatus('Session scheduled and student notified.');
-            setScheduleDateTime('');
+            setScheduleDate('');
+            setScheduleHour('09');
+            setScheduleMinute('00');
             await fetchCoreData();
         } catch (error: any) {
             setStatus(error.response?.data?.message || 'Failed to schedule session.');
@@ -179,7 +184,32 @@ export function SessionsPage() {
                             <option value="">Select student</option>
                             {students.map((student) => <option key={student.id} value={student.id}>{student.name} ({student.email})</option>)}
                         </select>
-                        <input type="datetime-local" className="h-10 px-3 rounded-md border bg-background" value={scheduleDateTime} onChange={(e) => setScheduleDateTime(e.target.value)} />
+                        <div className="flex gap-2">
+                            <input
+                                type="date"
+                                className="h-10 px-3 rounded-md border bg-background"
+                                value={scheduleDate}
+                                onChange={(e) => setScheduleDate(e.target.value)}
+                            />
+                            <select
+                                className="h-10 px-2 rounded-md border bg-background"
+                                value={scheduleHour}
+                                onChange={(e) => setScheduleHour(e.target.value)}
+                            >
+                                {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map((h) => (
+                                    <option key={h} value={h}>{h}</option>
+                                ))}
+                            </select>
+                            <select
+                                className="h-10 px-2 rounded-md border bg-background"
+                                value={scheduleMinute}
+                                onChange={(e) => setScheduleMinute(e.target.value)}
+                            >
+                                {['00', '15', '30', '45'].map((m) => (
+                                    <option key={m} value={m}>{m}</option>
+                                ))}
+                            </select>
+                        </div>
                         <button onClick={scheduleSession} className="h-10 px-4 rounded-md bg-primary text-primary-foreground hover:bg-primary/90">Schedule</button>
                     </div>
                 </section>
