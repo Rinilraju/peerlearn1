@@ -8,6 +8,7 @@ let stripe = null;
 if (process.env.STRIPE_SECRET_KEY) {
     stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 }
+const simulatePayments = process.env.SIMULATE_PAYMENTS !== 'false';
 
 async function upsertEnrollment({ userId, courseId, paymentId }) {
     await db.query(
@@ -40,8 +41,8 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
 
         const course = courseResult.rows[0];
 
-        // Simulated payment mode when gateway key is not configured.
-        if (!stripe) {
+        // Simulated payment mode (default) to allow enrollment without gateway setup.
+        if (simulatePayments || !stripe) {
             const paymentResult = await db.query(
                 `INSERT INTO payments (user_id, course_id, amount, currency, provider, provider_session_id, status)
                  VALUES ($1, $2, $3, 'usd', 'simulated', $4, 'paid')
@@ -103,7 +104,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
 });
 
 router.post('/confirm', authenticateToken, async (req, res) => {
-    if (!stripe) {
+    if (simulatePayments || !stripe) {
         return res.status(400).json({
             message: 'Stripe confirmation is disabled in simulated payment mode.',
         });
