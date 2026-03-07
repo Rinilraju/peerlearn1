@@ -1,18 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { CourseCard } from '../components/CourseCard';
-import { SessionCard } from '../components/SessionCard';
-import { SESSIONS } from '../data/mockData';
 import { Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 
 export function DashboardPage() {
     const { user } = useAuth();
-    const upcomingSessions = SESSIONS; // Mock upcoming sessions
     const [myCourses, setMyCourses] = useState<any[]>([]);
     const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
     const [recommendedCourses, setRecommendedCourses] = useState<any[]>([]);
+    const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
 
     const mapCourse = (course: any) => ({
         ...course,
@@ -32,10 +30,16 @@ export function DashboardPage() {
                     api.get('/courses/enrolled'),
                     api.get('/recommendations/courses?limit=4'),
                 ]);
+                const sessionsRes = await api.get('/sessions/mine');
+                const now = Date.now();
+                const upcoming = sessionsRes.data
+                    .filter((s: any) => new Date(s.scheduled_at).getTime() >= now && s.status !== 'completed')
+                    .slice(0, 5);
 
                 setMyCourses(mineRes.data.map(mapCourse));
                 setEnrolledCourses(enrolledRes.data.map(mapCourse));
                 setRecommendedCourses(recRes.data.map(mapCourse));
+                setUpcomingSessions(upcoming);
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
             }
@@ -60,13 +64,15 @@ export function DashboardPage() {
                     >
                         Sessions & Chat
                     </Link>
-                    <Link
-                        to="/create-course"
-                        className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-                    >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create New Course
-                    </Link>
+                    {(user?.role === 'tutor' || user?.role === 'admin' || user?.role === 'student') && (
+                        <Link
+                            to="/create-course"
+                            className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                        >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create New Course
+                        </Link>
+                    )}
                 </div>
             </div>
 
@@ -120,11 +126,22 @@ export function DashboardPage() {
                 <div className="space-y-6">
                     <section>
                         <h2 className="text-xl font-bold mb-4">Upcoming Live Sessions</h2>
-                        <div className="space-y-4">
-                            {upcomingSessions.map(session => (
-                                <SessionCard key={session.id} session={session} />
-                            ))}
-                        </div>
+                        {upcomingSessions.length > 0 ? (
+                            <div className="space-y-3">
+                                {upcomingSessions.map((session) => (
+                                    <div key={session.id} className="p-3 border rounded-md bg-card">
+                                        <div className="font-medium">{session.course_title}</div>
+                                        <div className="text-sm text-muted-foreground">{new Date(session.scheduled_at).toLocaleString()}</div>
+                                        <div className="text-xs text-muted-foreground">Status: {session.status}</div>
+                                        {(session.can_join || session.can_start) && (
+                                            <Link to="/sessions" className="inline-block mt-2 text-primary text-sm hover:underline">Open Session Controls</Link>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">No upcoming sessions.</p>
+                        )}
                     </section>
 
                     <div className="p-4 rounded-lg bg-secondary/20 border border-secondary">
