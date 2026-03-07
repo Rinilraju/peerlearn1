@@ -84,6 +84,13 @@ export function CourseDetailPage() {
         if (!id) {
             return;
         }
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            setStatusMessage('Please login first to enroll in this course.');
+            return;
+        }
+
         setIsPaying(true);
         setStatusMessage('');
         try {
@@ -99,9 +106,14 @@ export function CourseDetailPage() {
                 return;
             }
             setStatusMessage('Failed to create checkout session.');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Checkout failed:', error);
-            setStatusMessage('Checkout failed. Make sure you are logged in and Stripe keys are configured on backend.');
+            const backendMessage = error?.response?.data?.message;
+            if (error?.response?.status === 401) {
+                setStatusMessage('Session expired or not logged in. Please login and try again.');
+            } else {
+                setStatusMessage(backendMessage || 'Checkout failed due to server error.');
+            }
         } finally {
             setIsPaying(false);
         }
