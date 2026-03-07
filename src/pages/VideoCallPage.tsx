@@ -12,6 +12,29 @@ type PeerItem = {
 
 const SIGNAL_SERVER_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+function getIceServers(): RTCIceServer[] {
+    // Primary path: JSON array from env (recommended for production).
+    // Example:
+    // VITE_WEBRTC_ICE_SERVERS=[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}]
+    const raw = import.meta.env.VITE_WEBRTC_ICE_SERVERS;
+    if (raw) {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed;
+            }
+        } catch (error) {
+            console.error('Invalid VITE_WEBRTC_ICE_SERVERS JSON:', error);
+        }
+    }
+
+    // Fallback STUN-only config. Works for some networks, not all.
+    return [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+    ];
+}
+
 export function VideoCallPage() {
     const { id: roomId } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -200,12 +223,16 @@ export function VideoCallPage() {
 function createPeer(userToSignal: string, localStream: MediaStream, socket: Socket) {
     const peer = new Peer({
         initiator: true,
-        trickle: false,
+        trickle: true,
         stream: localStream,
+        config: { iceServers: getIceServers() },
     });
 
     peer.on('signal', (signal) => {
         socket.emit('sending-signal', { userToSignal, signal });
+    });
+    peer.on('error', (error) => {
+        console.error('Peer error (initiator):', error);
     });
 
     return peer;
@@ -214,12 +241,16 @@ function createPeer(userToSignal: string, localStream: MediaStream, socket: Sock
 function addPeer(incomingSignal: SignalData, callerID: string, localStream: MediaStream, socket: Socket) {
     const peer = new Peer({
         initiator: false,
-        trickle: false,
+        trickle: true,
         stream: localStream,
+        config: { iceServers: getIceServers() },
     });
 
     peer.on('signal', (signal) => {
         socket.emit('returning-signal', { signal, callerID });
+    });
+    peer.on('error', (error) => {
+        console.error('Peer error (receiver):', error);
     });
 
     peer.signal(incomingSignal);
