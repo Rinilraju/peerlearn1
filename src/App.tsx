@@ -19,6 +19,7 @@ import { DoubtClearingPage } from './pages/DoubtClearingPage';
 import { ProfileSetupPage } from './pages/ProfileSetupPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { SessionsPage } from './pages/SessionsPage';
 import { DoubtProvider } from './context/DoubtContext';
 
 import { useAuth } from './context/AuthContext';
@@ -54,6 +55,7 @@ function App() {
                                     <Route element={<ProfileCheck />}>
                                         <Route path="/dashboard" element={<DashboardPage />} />
                                         <Route path="/create-course" element={<CreateCoursePage />} />
+                                        <Route path="/sessions" element={<SessionsPage />} />
                                         <Route path="/session/:id" element={<VideoCallPage />} />
                                         <Route path="/settings" element={<SettingsPage />} />
                                     </Route>

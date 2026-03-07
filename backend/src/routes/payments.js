@@ -25,12 +25,6 @@ async function upsertEnrollment({ userId, courseId, paymentId }) {
 }
 
 router.post('/create-checkout-session', authenticateToken, async (req, res) => {
-    if (!stripe) {
-        return res.status(500).json({
-            message: 'Stripe is not configured on server. Set STRIPE_SECRET_KEY in backend/.env.',
-        });
-    }
-
     const userId = req.user.id;
     const { courseId } = req.body;
 
@@ -45,6 +39,24 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
         }
 
         const course = courseResult.rows[0];
+
+        // Simulated payment mode when gateway key is not configured.
+        if (!stripe) {
+            const paymentResult = await db.query(
+                `INSERT INTO payments (user_id, course_id, amount, currency, provider, provider_session_id, status)
+                 VALUES ($1, $2, $3, 'usd', 'simulated', $4, 'paid')
+                 RETURNING id`,
+                [userId, course.id, Number(course.price || 0), `sim-${Date.now()}-${userId}`]
+            );
+            await upsertEnrollment({ userId, courseId: course.id, paymentId: paymentResult.rows[0].id });
+            return res.status(201).json({
+                simulated: true,
+                enrolled: true,
+                paymentId: paymentResult.rows[0].id,
+                message: 'Simulated payment completed. Enrollment activated.',
+            });
+        }
+
         const amount = Math.max(Math.round(Number(course.price || 0) * 100), 50);
         const origin = process.env.CLIENT_URL || req.headers.origin || 'http://localhost:5173';
 
@@ -92,8 +104,8 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
 
 router.post('/confirm', authenticateToken, async (req, res) => {
     if (!stripe) {
-        return res.status(500).json({
-            message: 'Stripe is not configured on server. Set STRIPE_SECRET_KEY in backend/.env.',
+        return res.status(400).json({
+            message: 'Stripe confirmation is disabled in simulated payment mode.',
         });
     }
 

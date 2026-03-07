@@ -53,13 +53,21 @@ export function DashboardPage() {
                         Welcome back, {user?.name}! Here's what's happening today.
                     </p>
                 </div>
-                <Link
-                    to="/create-course"
-                    className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-                >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create New Course
-                </Link>
+                <div className="flex gap-2">
+                    <Link
+                        to="/sessions"
+                        className="inline-flex items-center px-4 py-2 border rounded-md hover:bg-muted transition-colors"
+                    >
+                        Sessions & Chat
+                    </Link>
+                    <Link
+                        to="/create-course"
+                        className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                    >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create New Course
+                    </Link>
+                </div>
             </div>
 
             <div className="grid md:grid-cols-3 gap-8">

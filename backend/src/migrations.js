@@ -133,6 +133,62 @@ async function runMigrations() {
             );
         `);
 
+        // 7. Scheduled 1:1 sessions between instructor and enrolled student.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS course_sessions (
+                id SERIAL PRIMARY KEY,
+                course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+                instructor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                scheduled_at TIMESTAMP NOT NULL,
+                duration_minutes INTEGER NOT NULL DEFAULT 60,
+                meeting_room_id VARCHAR(100) NOT NULL,
+                status VARCHAR(30) NOT NULL DEFAULT 'scheduled',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 8. In-app notifications (session reminders, scheduling updates).
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title VARCHAR(255) NOT NULL,
+                body TEXT NOT NULL,
+                type VARCHAR(50) NOT NULL DEFAULT 'general',
+                related_session_id INTEGER REFERENCES course_sessions(id) ON DELETE SET NULL,
+                is_read BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // 9. Simple course chat between tutor and enrolled students.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS course_chat_messages (
+                id SERIAL PRIMARY KEY,
+                course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+                sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                receiver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_course_sessions_instructor_student
+            ON course_sessions(instructor_id, student_id, scheduled_at);
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_notifications_user
+            ON notifications(user_id, is_read, created_at DESC);
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_course_chat_pair
+            ON course_chat_messages(course_id, sender_id, receiver_id, created_at DESC);
+        `);
+
         console.log('Migrations completed successfully.');
     } catch (error) {
         console.error('Migration failed:', error);

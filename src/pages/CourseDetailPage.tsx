@@ -88,6 +88,11 @@ export function CourseDetailPage() {
         setStatusMessage('');
         try {
             const response = await api.post('/payments/create-checkout-session', { courseId: id });
+            if (response.data?.simulated && response.data?.enrolled) {
+                setIsEnrolled(true);
+                setStatusMessage('Simulated payment successful. You are now enrolled.');
+                return;
+            }
             const checkoutUrl = response.data?.checkoutUrl;
             if (checkoutUrl) {
                 window.location.href = checkoutUrl;
