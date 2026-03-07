@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   phone_number VARCHAR(20),
   education_qualification VARCHAR(255),
   profession VARCHAR(255),
+  role VARCHAR(20) NOT NULL DEFAULT 'student',
   reset_password_code VARCHAR(6),
   reset_password_expires TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

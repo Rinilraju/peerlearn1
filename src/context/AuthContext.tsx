@@ -5,7 +5,7 @@ interface User {
     id: string;
     name: string;
     email: string;
-    role: 'student' | 'teacher';
+    role: 'student' | 'tutor' | 'admin';
     username?: string;
     profile_picture?: string;
     date_of_birth?: string;
@@ -51,8 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
             const response = await api.post('/auth/login', { email, password });
             const { token, user } = response.data;
-
-            const userData: User = { ...user, role: 'student' }; // Default role
+            const userData: User = { ...user, role: user.role || 'student' };
 
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(userData));

@@ -74,6 +74,14 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     try {
+        const scheduledAtDate = new Date(scheduledAt);
+        if (Number.isNaN(scheduledAtDate.getTime())) {
+            return res.status(400).json({ message: 'Invalid scheduledAt value.' });
+        }
+        if (scheduledAtDate.getTime() < Date.now()) {
+            return res.status(400).json({ message: 'Scheduled time must be in the future.' });
+        }
+
         const owner = await db.query('SELECT id, title FROM courses WHERE id = $1 AND instructor_id = $2', [courseId, instructorId]);
         if (owner.rows.length === 0) {
             return res.status(403).json({ message: 'Only course instructor can schedule sessions.' });
@@ -84,12 +92,31 @@ router.post('/', authenticateToken, async (req, res) => {
             return res.status(400).json({ message: 'Student is not enrolled in this course.' });
         }
 
+        const requestedDuration = Number(durationMinutes || 60);
+        if (requestedDuration < 15 || requestedDuration > 240) {
+            return res.status(400).json({ message: 'Duration must be between 15 and 240 minutes.' });
+        }
+
+        const overlapCheck = await db.query(
+            `SELECT id
+             FROM course_sessions
+             WHERE status IN ('scheduled', 'live')
+               AND (instructor_id = $1 OR student_id = $2)
+               AND scheduled_at < ($3::timestamp + ($4 * INTERVAL '1 minute'))
+               AND (scheduled_at + (duration_minutes * INTERVAL '1 minute')) > $3::timestamp
+             LIMIT 1`,
+            [instructorId, studentId, scheduledAtDate.toISOString(), requestedDuration]
+        );
+        if (overlapCheck.rows.length > 0) {
+            return res.status(400).json({ message: 'Session overlaps with an existing class for tutor/student.' });
+        }
+
         const roomId = `course-${courseId}-student-${studentId}-${Date.now()}`;
         const result = await db.query(
             `INSERT INTO course_sessions (course_id, instructor_id, student_id, scheduled_at, duration_minutes, meeting_room_id)
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
-            [courseId, instructorId, studentId, scheduledAt, durationMinutes || 60, roomId]
+            [courseId, instructorId, studentId, scheduledAtDate.toISOString(), requestedDuration, roomId]
         );
 
         const session = result.rows[0];

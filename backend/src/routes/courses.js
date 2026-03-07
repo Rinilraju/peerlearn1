@@ -91,6 +91,12 @@ router.post('/', authenticateToken, async (req, res) => {
             'INSERT INTO courses (title, description, price, category, instructor_id, video_url, thumbnail) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
             [title, description, price, category, instructor_id, video_url, thumbnail]
         );
+        await db.query(
+            `UPDATE users
+             SET role = 'tutor'
+             WHERE id = $1 AND role != 'admin'`,
+            [instructor_id]
+        );
         console.log('Course created successfully:', result.rows[0].id);
         res.status(201).json(result.rows[0]);
     } catch (error) {

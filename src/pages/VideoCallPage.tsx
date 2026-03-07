@@ -44,6 +44,7 @@ export function VideoCallPage() {
     const [isMuted, setIsMuted] = useState(false);
     const [isVideoOff, setIsVideoOff] = useState(false);
     const [accessError, setAccessError] = useState('');
+    const [callStatus, setCallStatus] = useState('Checking room access...');
 
     const userVideo = useRef<HTMLVideoElement>(null);
     const peersRef = useRef<PeerItem[]>([]);
@@ -68,6 +69,7 @@ export function VideoCallPage() {
         const bootstrap = async () => {
             try {
                 await api.get(`/sessions/room/${roomId}/access`);
+                setCallStatus('Room access granted. Initializing media...');
             } catch (error: any) {
                 setAccessError(error?.response?.data?.message || 'You are not allowed to join this live class.');
                 return;
@@ -85,6 +87,7 @@ export function VideoCallPage() {
                 }
 
                 setStream(currentStream);
+                setCallStatus('Connecting to live room...');
                 if (userVideo.current) {
                     userVideo.current.srcObject = currentStream;
                 }
@@ -101,6 +104,7 @@ export function VideoCallPage() {
                         peersRef.current.push(peerItem);
                     });
                     setPeers([...peersRef.current]);
+                    setCallStatus(users.length > 0 ? 'Connected to room.' : 'Waiting for participant...');
                 });
 
                 socket.on('user-joined-room', (userId: string) => {
@@ -111,6 +115,7 @@ export function VideoCallPage() {
                     const peerItem = { peerID: userId, peer };
                     peersRef.current.push(peerItem);
                     setPeers([...peersRef.current]);
+                    setCallStatus('Participant joined.');
                 });
 
                 socket.on('user-joined', ({ signal, callerID }: { signal: SignalData; callerID: string }) => {
@@ -132,13 +137,17 @@ export function VideoCallPage() {
 
                 socket.on('user-left', (socketId: string) => {
                     removePeer(socketId);
+                    setCallStatus('Participant left. Waiting...');
                 });
 
                 socket.on('room-access-denied', (payload: { message?: string }) => {
                     setAccessError(payload?.message || 'Room access denied.');
+                    setCallStatus('Access denied.');
                 });
             }).catch((error) => {
                 console.error('Failed to access camera/microphone:', error);
+                setAccessError('Camera or microphone permission denied.');
+                setCallStatus('Media access failed.');
             });
         };
 
@@ -186,6 +195,10 @@ export function VideoCallPage() {
                     <Users className="h-4 w-4" />
                     <span>{peers.length + 1} Participants</span>
                 </div>
+            </div>
+
+            <div className="px-4 py-2 text-xs text-slate-300 bg-slate-900/50 border-b border-slate-800">
+                {callStatus}
             </div>
 
             {accessError && (

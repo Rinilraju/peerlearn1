@@ -25,7 +25,9 @@ router.post('/signup', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(normalizedPassword, 10);
         await db.query(
-            'INSERT INTO users (name, email, password, is_verified, verification_code) VALUES ($1, $2, $3, TRUE, NULL) RETURNING id, email',
+            `INSERT INTO users (name, email, password, is_verified, verification_code, role)
+             VALUES ($1, $2, $3, TRUE, NULL, 'student')
+             RETURNING id, email`,
             [name, normalizedEmail, hashedPassword]
         );
         res.status(201).json({ message: 'User created successfully. You can now login.' });
@@ -95,7 +97,8 @@ router.post('/login', async (req, res) => {
                 date_of_birth: user.date_of_birth,
                 phone_number: user.phone_number,
                 education_qualification: user.education_qualification,
-                profession: user.profession
+                profession: user.profession,
+                role: user.role || 'student'
             }
         });
     } catch (error) {
@@ -130,7 +133,7 @@ router.post('/complete-profile', async (req, res) => {
             `UPDATE users 
              SET username = $1, date_of_birth = $2, phone_number = $3, education_qualification = $4, profession = $5, profile_picture = $6
              WHERE id = $7
-             RETURNING id, name, email, username, profile_picture, date_of_birth, phone_number, education_qualification, profession`,
+             RETURNING id, name, email, username, profile_picture, date_of_birth, phone_number, education_qualification, profession, role`,
             [username, date_of_birth, phone_number, education_qualification, profession, profile_picture, userId]
         );
 
@@ -155,7 +158,7 @@ router.put('/profile', async (req, res) => {
             `UPDATE users 
              SET name = $1, username = $2, date_of_birth = $3, phone_number = $4, education_qualification = $5, profession = $6, profile_picture = $7
              WHERE id = $8
-             RETURNING id, name, email, username, profile_picture, date_of_birth, phone_number, education_qualification, profession`,
+             RETURNING id, name, email, username, profile_picture, date_of_birth, phone_number, education_qualification, profession, role`,
             [name, username, date_of_birth, phone_number, education_qualification, profession, profile_picture, userId]
         );
 

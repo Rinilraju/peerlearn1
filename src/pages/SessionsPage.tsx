@@ -175,6 +175,7 @@ export function SessionsPage() {
             {isTutor && (
                 <section className="p-4 border rounded-lg space-y-4">
                     <h2 className="text-xl font-semibold">Schedule Session For Enrolled Student</h2>
+                    <p className="text-xs text-muted-foreground">Times are scheduled in your current local timezone.</p>
                     <div className="grid md:grid-cols-4 gap-3">
                         <select className="h-10 px-3 rounded-md border bg-background" value={selectedCourseId ?? ''} onChange={(e) => setSelectedCourseId(Number(e.target.value))}>
                             <option value="">Select course</option>
