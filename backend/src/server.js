@@ -99,7 +99,7 @@ async function canUserJoinLiveRoom(userId, roomId) {
     // Student can join only around scheduled time.
     const scheduled = new Date(session.scheduled_at).getTime();
     const durationMs = Number(session.duration_minutes || 60) * 60 * 1000;
-    const startWindow = scheduled - 15 * 60 * 1000;
+    const startWindow = scheduled;
     const endWindow = scheduled + durationMs + 30 * 60 * 1000;
     const now = Date.now();
     return now >= startWindow && now <= endWindow;

@@ -15,7 +15,7 @@ async function isStudentEnrolled(studentId, courseId) {
 function getWindowBounds(session) {
     const scheduled = new Date(session.scheduled_at).getTime();
     const durationMs = Number(session.duration_minutes || 60) * 60 * 1000;
-    const startWindow = scheduled - 15 * 60 * 1000;
+    const startWindow = scheduled;
     const endWindow = scheduled + durationMs + 30 * 60 * 1000;
     return { startWindow, endWindow };
 }
