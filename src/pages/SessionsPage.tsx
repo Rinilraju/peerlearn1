@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api';
+import io, { Socket } from 'socket.io-client';
 
 type Course = { id: number; title: string };
 type Student = { id: number; name: string; email: string };
@@ -51,6 +52,8 @@ export function SessionsPage() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [status, setStatus] = useState('');
+    const socketRef = useRef<Socket | null>(null);
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
     const isTutor = myCourses.length > 0;
     const chatCourseId = useMemo(() => {
@@ -84,6 +87,49 @@ export function SessionsPage() {
         const intervalId = window.setInterval(fetchCoreData, 30000);
         return () => window.clearInterval(intervalId);
     }, []);
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const socket = io(apiBaseUrl, { auth: { token } });
+        socketRef.current = socket;
+
+        socket.on('notification', (n: { title: string; body: string; relatedSessionId?: number }) => {
+            setNotifications((prev) => [
+                {
+                    id: Date.now(),
+                    title: n.title,
+                    body: n.body,
+                    type: 'realtime',
+                    related_session_id: n.relatedSessionId,
+                    is_read: false,
+                    created_at: new Date().toISOString(),
+                },
+                ...prev,
+            ]);
+        });
+
+        socket.on('chat-message', (msg: ChatMessage & { course_id: number }) => {
+            const activeCourse = chatCourseId;
+            const peer = selectedPeerId;
+            if (!activeCourse || !peer) return;
+            const involvesPeer = Number(msg.sender_id) === Number(peer) || Number(msg.receiver_id) === Number(peer);
+            if (Number(msg.course_id) === Number(activeCourse) && involvesPeer) {
+                setMessages((prev) => [...prev, msg]);
+            }
+        });
+
+        return () => {
+            socket.disconnect();
+            socketRef.current = null;
+        };
+    }, [apiBaseUrl, chatCourseId, selectedPeerId]);
+
+    useEffect(() => {
+        if (!chatCourseId || !selectedPeerId || !socketRef.current) return;
+        socketRef.current.emit('join-chat', { courseId: chatCourseId, peerId: selectedPeerId });
+    }, [chatCourseId, selectedPeerId]);
 
     useEffect(() => {
         if (!selectedCourseId) return;
@@ -159,6 +205,17 @@ export function SessionsPage() {
     const sendMessage = async () => {
         if (!chatCourseId || !selectedPeerId || !newMessage.trim()) return;
         try {
+            const socket = socketRef.current;
+            if (socket) {
+                socket.emit('send-chat-message', { courseId: chatCourseId, peerId: selectedPeerId, message: newMessage }, (ack: any) => {
+                    if (!ack?.ok) {
+                        setStatus(ack?.message || 'Failed to send message.');
+                        return;
+                    }
+                    setNewMessage('');
+                });
+                return;
+            }
             const res = await api.post(`/chat/course/${chatCourseId}/messages/${selectedPeerId}`, { message: newMessage });
             setMessages((prev) => [...prev, res.data]);
             setNewMessage('');

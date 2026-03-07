@@ -130,6 +130,12 @@ router.post('/', authenticateToken, async (req, res) => {
                 session.id,
             ]
         );
+        const io = req.app.get('io');
+        io?.to(`user:${studentId}`).emit('notification', {
+            title: 'New 1:1 Session Scheduled',
+            body: `Your tutor scheduled a session for ${new Date(session.scheduled_at).toLocaleString()}.`,
+            relatedSessionId: session.id,
+        });
 
         return res.status(201).json(session);
     } catch (error) {
@@ -187,6 +193,12 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
              VALUES ($1, 'Live Session Started', 'Your tutor started the session. You can join now.', 'session_live', $2)`,
             [session.student_id, id]
         );
+        const io = req.app.get('io');
+        io?.to(`user:${session.student_id}`).emit('notification', {
+            title: 'Live Session Started',
+            body: 'Your tutor started the session. You can join now.',
+            relatedSessionId: Number(id),
+        });
 
         const liveSession = attachSessionAccessFlags(updated.rows[0], userId);
         return res.json({

@@ -154,6 +154,7 @@ async function runMigrations() {
 
         await db.query(`ALTER TABLE course_sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMP;`);
         await db.query(`ALTER TABLE course_sessions ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP;`);
+        await db.query(`ALTER TABLE course_sessions ADD COLUMN IF NOT EXISTS reminder_sent_10m BOOLEAN NOT NULL DEFAULT FALSE;`);
 
         // 8. In-app notifications (session reminders, scheduling updates).
         await db.query(`
