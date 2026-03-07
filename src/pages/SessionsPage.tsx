@@ -301,12 +301,12 @@ export function SessionsPage() {
                                     {!session.can_start && !session.can_join && (
                                         <span className="text-xs text-muted-foreground">Waiting for live window/tutor start</span>
                                     )}
-                                    {Number(session.instructor_id) === Number(user?.id) && session.status === 'scheduled' && (
+                                    {Number(session.instructor_id) === Number(user?.id) && ['scheduled', 'live'].includes(session.status) && (
                                         <button
                                             onClick={() => deleteSession(session.id)}
                                             className="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
                                         >
-                                            Delete Schedule
+                                            {session.status === 'live' ? 'End & Delete Session' : 'Delete Schedule'}
                                         </button>
                                     )}
                                 </div>

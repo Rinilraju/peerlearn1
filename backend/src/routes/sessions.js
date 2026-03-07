@@ -254,21 +254,24 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         if (Number(session.instructor_id) !== Number(userId)) {
             return res.status(403).json({ message: 'Only tutor can delete scheduled sessions.' });
         }
-        if (session.status !== 'scheduled') {
-            return res.status(400).json({ message: 'Only scheduled sessions can be deleted.' });
+        if (!['scheduled', 'live'].includes(session.status)) {
+            return res.status(400).json({ message: 'Only scheduled or live sessions can be deleted.' });
         }
 
         await db.query('DELETE FROM course_sessions WHERE id = $1', [id]);
 
+        const cancellationBody = session.status === 'live'
+            ? 'Your tutor ended and removed a live session.'
+            : 'Your tutor cancelled a scheduled session.';
         await db.query(
             `INSERT INTO notifications (user_id, title, body, type)
-             VALUES ($1, 'Session Cancelled', 'Your tutor cancelled a scheduled session.', 'session_cancelled')`,
-            [session.student_id]
+             VALUES ($1, 'Session Cancelled', $2, 'session_cancelled')`,
+            [session.student_id, cancellationBody]
         );
         const io = req.app.get('io');
         io?.to(`user:${session.student_id}`).emit('notification', {
             title: 'Session Cancelled',
-            body: 'Your tutor cancelled a scheduled session.',
+            body: cancellationBody,
         });
 
         return res.json({ ok: true });
