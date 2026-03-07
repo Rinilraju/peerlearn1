@@ -34,12 +34,15 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
     }
 
     try {
-        const courseResult = await db.query('SELECT id, title, description, price FROM courses WHERE id = $1', [courseId]);
+        const courseResult = await db.query('SELECT id, title, description, price, instructor_id FROM courses WHERE id = $1', [courseId]);
         if (courseResult.rows.length === 0) {
             return res.status(404).json({ message: 'Course not found' });
         }
 
         const course = courseResult.rows[0];
+        if (Number(course.instructor_id) === Number(userId)) {
+            return res.status(400).json({ message: 'Tutors cannot enroll in their own courses.' });
+        }
 
         // Simulated payment mode (default) to allow enrollment without gateway setup.
         if (simulatePayments || !stripe) {

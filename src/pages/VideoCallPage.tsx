@@ -3,6 +3,7 @@ import { Mic, MicOff, Video, VideoOff, PhoneOff, Users } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import io, { Socket } from 'socket.io-client';
 import Peer, { SignalData } from 'simple-peer';
+import api from '../api';
 
 type PeerItem = {
     peerID: string;
@@ -19,6 +20,7 @@ export function VideoCallPage() {
     const [peers, setPeers] = useState<PeerItem[]>([]);
     const [isMuted, setIsMuted] = useState(false);
     const [isVideoOff, setIsVideoOff] = useState(false);
+    const [accessError, setAccessError] = useState('');
 
     const userVideo = useRef<HTMLVideoElement>(null);
     const peersRef = useRef<PeerItem[]>([]);
@@ -30,8 +32,6 @@ export function VideoCallPage() {
         }
 
         let mounted = true;
-        const socket = io(SIGNAL_SERVER_URL);
-        socketRef.current = socket;
 
         const removePeer = (peerId: string) => {
             const peerObj = peersRef.current.find((p) => p.peerID === peerId);
@@ -42,68 +42,90 @@ export function VideoCallPage() {
             setPeers([...peersRef.current]);
         };
 
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((currentStream) => {
-            if (!mounted) {
+        const bootstrap = async () => {
+            try {
+                await api.get(`/sessions/room/${roomId}/access`);
+            } catch (error: any) {
+                setAccessError(error?.response?.data?.message || 'You are not allowed to join this live class.');
                 return;
             }
 
-            setStream(currentStream);
-            if (userVideo.current) {
-                userVideo.current.srcObject = currentStream;
-            }
+            const token = localStorage.getItem('token');
+            const socket = io(SIGNAL_SERVER_URL, {
+                auth: { token },
+            });
+            socketRef.current = socket;
 
-            socket.emit('join-room', roomId);
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((currentStream) => {
+                if (!mounted) {
+                    return;
+                }
 
-            socket.on('room-users', (users: string[]) => {
-                users.forEach((userToSignal) => {
-                    if (peersRef.current.some((p) => p.peerID === userToSignal)) {
+                setStream(currentStream);
+                if (userVideo.current) {
+                    userVideo.current.srcObject = currentStream;
+                }
+
+                socket.emit('join-room', roomId);
+
+                socket.on('room-users', (users: string[]) => {
+                    users.forEach((userToSignal) => {
+                        if (peersRef.current.some((p) => p.peerID === userToSignal)) {
+                            return;
+                        }
+                        const peer = createPeer(userToSignal, currentStream, socket);
+                        const peerItem = { peerID: userToSignal, peer };
+                        peersRef.current.push(peerItem);
+                    });
+                    setPeers([...peersRef.current]);
+                });
+
+                socket.on('user-joined-room', (userId: string) => {
+                    if (peersRef.current.some((p) => p.peerID === userId)) {
                         return;
                     }
-                    const peer = createPeer(userToSignal, currentStream, socket);
-                    const peerItem = { peerID: userToSignal, peer };
+                    const peer = createPeer(userId, currentStream, socket);
+                    const peerItem = { peerID: userId, peer };
                     peersRef.current.push(peerItem);
+                    setPeers([...peersRef.current]);
                 });
-                setPeers([...peersRef.current]);
-            });
 
-            socket.on('user-joined-room', (userId: string) => {
-                if (peersRef.current.some((p) => p.peerID === userId)) {
-                    return;
-                }
-                const peer = createPeer(userId, currentStream, socket);
-                const peerItem = { peerID: userId, peer };
-                peersRef.current.push(peerItem);
-                setPeers([...peersRef.current]);
-            });
+                socket.on('user-joined', ({ signal, callerID }: { signal: SignalData; callerID: string }) => {
+                    if (peersRef.current.some((p) => p.peerID === callerID)) {
+                        return;
+                    }
+                    const peer = addPeer(signal, callerID, currentStream, socket);
+                    const peerItem = { peerID: callerID, peer };
+                    peersRef.current.push(peerItem);
+                    setPeers([...peersRef.current]);
+                });
 
-            socket.on('user-joined', ({ signal, callerID }: { signal: SignalData; callerID: string }) => {
-                if (peersRef.current.some((p) => p.peerID === callerID)) {
-                    return;
-                }
-                const peer = addPeer(signal, callerID, currentStream, socket);
-                const peerItem = { peerID: callerID, peer };
-                peersRef.current.push(peerItem);
-                setPeers([...peersRef.current]);
-            });
+                socket.on('receiving-returned-signal', ({ signal, id }: { signal: SignalData; id: string }) => {
+                    const peerItem = peersRef.current.find((p) => p.peerID === id);
+                    if (peerItem) {
+                        peerItem.peer.signal(signal);
+                    }
+                });
 
-            socket.on('receiving-returned-signal', ({ signal, id }: { signal: SignalData; id: string }) => {
-                const peerItem = peersRef.current.find((p) => p.peerID === id);
-                if (peerItem) {
-                    peerItem.peer.signal(signal);
-                }
-            });
+                socket.on('user-left', (socketId: string) => {
+                    removePeer(socketId);
+                });
 
-            socket.on('user-left', (socketId: string) => {
-                removePeer(socketId);
+                socket.on('room-access-denied', (payload: { message?: string }) => {
+                    setAccessError(payload?.message || 'Room access denied.');
+                });
+            }).catch((error) => {
+                console.error('Failed to access camera/microphone:', error);
             });
-        }).catch((error) => {
-            console.error('Failed to access camera/microphone:', error);
-        });
+        };
+
+        bootstrap();
 
         return () => {
             mounted = false;
-            socket.removeAllListeners();
-            socket.disconnect();
+            const socket = socketRef.current;
+            socket?.removeAllListeners();
+            socket?.disconnect();
             socketRef.current = null;
             peersRef.current.forEach((peerObj) => peerObj.peer.destroy());
             peersRef.current = [];
@@ -142,6 +164,12 @@ export function VideoCallPage() {
                     <span>{peers.length + 1} Participants</span>
                 </div>
             </div>
+
+            {accessError && (
+                <div className="p-4 bg-red-500/20 text-red-200 border-b border-red-500/30 text-sm">
+                    {accessError}
+                </div>
+            )}
 
             <div className="flex-1 p-4 grid grid-cols-2 md:grid-cols-3 gap-4 overflow-y-auto">
                 <div className="relative bg-slate-800 rounded-lg overflow-hidden aspect-video">

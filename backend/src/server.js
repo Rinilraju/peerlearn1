@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const jwt = require('jsonwebtoken');
 
 dotenv.config();
 
@@ -68,12 +69,70 @@ const io = require('socket.io')(server, {
     }
 });
 
+async function canUserJoinLiveRoom(userId, roomId) {
+    const result = await db.query(
+        `SELECT id, instructor_id, student_id, status, scheduled_at, duration_minutes
+         FROM course_sessions
+         WHERE meeting_room_id = $1
+         LIMIT 1`,
+        [roomId]
+    );
+    if (result.rows.length === 0) {
+        return false;
+    }
+
+    const session = result.rows[0];
+    if (session.status !== 'live') {
+        return false;
+    }
+
+    const isInstructor = Number(session.instructor_id) === Number(userId);
+    const isStudent = Number(session.student_id) === Number(userId);
+    if (!isInstructor && !isStudent) {
+        return false;
+    }
+
+    if (isInstructor) {
+        return true;
+    }
+
+    // Student can join only around scheduled time.
+    const scheduled = new Date(session.scheduled_at).getTime();
+    const durationMs = Number(session.duration_minutes || 60) * 60 * 1000;
+    const startWindow = scheduled - 15 * 60 * 1000;
+    const endWindow = scheduled + durationMs + 30 * 60 * 1000;
+    const now = Date.now();
+    return now >= startWindow && now <= endWindow;
+}
+
 io.on('connection', (socket) => {
     console.log('New client connected', socket.id);
+    const token = socket.handshake?.auth?.token;
+    if (!token || !process.env.JWT_SECRET) {
+        socket.emit('room-access-denied', { message: 'Missing auth token for live session.' });
+        socket.disconnect();
+        return;
+    }
 
-    socket.on('join-room', (roomId) => {
+    let decoded;
+    try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+        socket.data.userId = decoded.id;
+    } catch (error) {
+        socket.emit('room-access-denied', { message: 'Invalid auth token for live session.' });
+        socket.disconnect();
+        return;
+    }
+
+    socket.on('join-room', async (roomId) => {
         const normalizedRoomId = String(roomId || '');
         if (!normalizedRoomId) {
+            return;
+        }
+
+        const allowed = await canUserJoinLiveRoom(socket.data.userId, normalizedRoomId);
+        if (!allowed) {
+            socket.emit('room-access-denied', { message: 'You are not allowed to join this live room now.' });
             return;
         }
 

@@ -144,9 +144,14 @@ async function runMigrations() {
                 duration_minutes INTEGER NOT NULL DEFAULT 60,
                 meeting_room_id VARCHAR(100) NOT NULL,
                 status VARCHAR(30) NOT NULL DEFAULT 'scheduled',
+                started_at TIMESTAMP,
+                ended_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
+
+        await db.query(`ALTER TABLE course_sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMP;`);
+        await db.query(`ALTER TABLE course_sessions ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP;`);
 
         // 8. In-app notifications (session reminders, scheduling updates).
         await db.query(`

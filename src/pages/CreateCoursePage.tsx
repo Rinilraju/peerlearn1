@@ -35,6 +35,11 @@ export function CreateCoursePage() {
             navigate('/courses');
         } catch (error: any) {
             console.error('Error creating course:', error);
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                alert('Your login session expired or is invalid. Please login again, then retry creating the course.');
+                navigate('/login');
+                return;
+            }
             const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to create course. Please try again.';
             alert(`Failed to create course: ${errorMessage}`);
         } finally {

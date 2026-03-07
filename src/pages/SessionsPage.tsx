@@ -1,16 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../api';
 
-type Course = {
-    id: number;
-    title: string;
-};
-
-type Student = {
-    id: number;
-    name: string;
-    email: string;
-};
+type Course = { id: number; title: string };
+type Student = { id: number; name: string; email: string };
 
 type SessionItem = {
     id: number;
@@ -24,6 +16,10 @@ type SessionItem = {
     duration_minutes: number;
     meeting_room_id: string;
     status: string;
+    can_start: boolean;
+    can_join: boolean;
+    join_enabled_for_student: boolean;
+    join_enabled_for_instructor: boolean;
 };
 
 type NotificationItem = {
@@ -36,19 +32,8 @@ type NotificationItem = {
     created_at: string;
 };
 
-type Contact = {
-    id: number;
-    name: string;
-    email: string;
-};
-
-type ChatMessage = {
-    id: number;
-    sender_id: number;
-    receiver_id: number;
-    message: string;
-    created_at: string;
-};
+type Contact = { id: number; name: string; email: string };
+type ChatMessage = { id: number; sender_id: number; receiver_id: number; message: string; created_at: string };
 
 export function SessionsPage() {
     const [myCourses, setMyCourses] = useState<Course[]>([]);
@@ -67,12 +52,8 @@ export function SessionsPage() {
 
     const isTutor = myCourses.length > 0;
     const chatCourseId = useMemo(() => {
-        if (selectedCourseId) {
-            return selectedCourseId;
-        }
-        if (isTutor) {
-            return myCourses[0]?.id ?? null;
-        }
+        if (selectedCourseId) return selectedCourseId;
+        if (isTutor) return myCourses[0]?.id ?? null;
         return enrolledCourses[0]?.id ?? null;
     }, [selectedCourseId, isTutor, myCourses, enrolledCourses]);
 
@@ -98,21 +79,19 @@ export function SessionsPage() {
 
     useEffect(() => {
         fetchCoreData();
+        const intervalId = window.setInterval(fetchCoreData, 30000);
+        return () => window.clearInterval(intervalId);
     }, []);
 
     useEffect(() => {
-        if (!selectedCourseId) {
-            return;
-        }
+        if (!selectedCourseId) return;
         api.get(`/sessions/course/${selectedCourseId}/students`)
             .then((res) => setStudents(res.data))
             .catch(() => setStudents([]));
     }, [selectedCourseId]);
 
     useEffect(() => {
-        if (!chatCourseId) {
-            return;
-        }
+        if (!chatCourseId) return;
         api.get(`/chat/course/${chatCourseId}/contacts`)
             .then((res) => {
                 setContacts(res.data);
@@ -138,7 +117,6 @@ export function SessionsPage() {
             setStatus('Select course, student, and schedule time.');
             return;
         }
-
         try {
             await api.post('/sessions', {
                 courseId: selectedCourseId,
@@ -154,6 +132,16 @@ export function SessionsPage() {
         }
     };
 
+    const startLiveClass = async (sessionId: number) => {
+        try {
+            const res = await api.post(`/sessions/${sessionId}/start`);
+            await fetchCoreData();
+            window.location.href = res.data.joinUrl;
+        } catch (error: any) {
+            setStatus(error.response?.data?.message || 'Failed to start live class.');
+        }
+    };
+
     const markNotificationRead = async (id: number) => {
         try {
             await api.patch(`/sessions/notifications/${id}/read`);
@@ -164,10 +152,7 @@ export function SessionsPage() {
     };
 
     const sendMessage = async () => {
-        if (!chatCourseId || !selectedPeerId || !newMessage.trim()) {
-            return;
-        }
-
+        if (!chatCourseId || !selectedPeerId || !newMessage.trim()) return;
         try {
             const res = await api.post(`/chat/course/${chatCourseId}/messages/${selectedPeerId}`, { message: newMessage });
             setMessages((prev) => [...prev, res.data]);
@@ -180,48 +165,22 @@ export function SessionsPage() {
     return (
         <div className="container mx-auto px-4 py-8 space-y-8">
             <h1 className="text-3xl font-bold">Sessions, Notifications & Chat</h1>
-
             {status && <div className="text-sm bg-secondary/30 border rounded p-3">{status}</div>}
 
             {isTutor && (
                 <section className="p-4 border rounded-lg space-y-4">
                     <h2 className="text-xl font-semibold">Schedule Session For Enrolled Student</h2>
                     <div className="grid md:grid-cols-4 gap-3">
-                        <select
-                            className="h-10 px-3 rounded-md border bg-background"
-                            value={selectedCourseId ?? ''}
-                            onChange={(e) => setSelectedCourseId(Number(e.target.value))}
-                        >
+                        <select className="h-10 px-3 rounded-md border bg-background" value={selectedCourseId ?? ''} onChange={(e) => setSelectedCourseId(Number(e.target.value))}>
                             <option value="">Select course</option>
-                            {myCourses.map((course) => (
-                                <option key={course.id} value={course.id}>{course.title}</option>
-                            ))}
+                            {myCourses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
                         </select>
-
-                        <select
-                            className="h-10 px-3 rounded-md border bg-background"
-                            value={selectedStudentId ?? ''}
-                            onChange={(e) => setSelectedStudentId(Number(e.target.value))}
-                        >
+                        <select className="h-10 px-3 rounded-md border bg-background" value={selectedStudentId ?? ''} onChange={(e) => setSelectedStudentId(Number(e.target.value))}>
                             <option value="">Select student</option>
-                            {students.map((student) => (
-                                <option key={student.id} value={student.id}>{student.name} ({student.email})</option>
-                            ))}
+                            {students.map((student) => <option key={student.id} value={student.id}>{student.name} ({student.email})</option>)}
                         </select>
-
-                        <input
-                            type="datetime-local"
-                            className="h-10 px-3 rounded-md border bg-background"
-                            value={scheduleDateTime}
-                            onChange={(e) => setScheduleDateTime(e.target.value)}
-                        />
-
-                        <button
-                            onClick={scheduleSession}
-                            className="h-10 px-4 rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
-                        >
-                            Schedule
-                        </button>
+                        <input type="datetime-local" className="h-10 px-3 rounded-md border bg-background" value={scheduleDateTime} onChange={(e) => setScheduleDateTime(e.target.value)} />
+                        <button onClick={scheduleSession} className="h-10 px-4 rounded-md bg-primary text-primary-foreground hover:bg-primary/90">Schedule</button>
                     </div>
                 </section>
             )}
@@ -238,15 +197,20 @@ export function SessionsPage() {
                                 <div className="text-sm text-muted-foreground">
                                     {new Date(session.scheduled_at).toLocaleString()} • {session.duration_minutes} mins
                                 </div>
-                                <div className="text-sm">
-                                    Tutor: {session.instructor_name} • Student: {session.student_name}
+                                <div className="text-sm">Tutor: {session.instructor_name} • Student: {session.student_name}</div>
+                                <div className="mt-2 flex gap-3">
+                                    {session.can_start && (
+                                        <button onClick={() => startLiveClass(session.id)} className="text-sm px-3 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90">
+                                            Start Live Class
+                                        </button>
+                                    )}
+                                    {session.can_join && (
+                                        <a href={`/session/${session.meeting_room_id}`} className="inline-block text-primary hover:underline text-sm">Join Now</a>
+                                    )}
+                                    {!session.can_start && !session.can_join && (
+                                        <span className="text-xs text-muted-foreground">Waiting for live window/tutor start</span>
+                                    )}
                                 </div>
-                                <a
-                                    href={`/session/${session.meeting_room_id}`}
-                                    className="inline-block mt-2 text-primary hover:underline text-sm"
-                                >
-                                    Join Session Room
-                                </a>
                             </div>
                         ))}
                     </div>
@@ -263,11 +227,7 @@ export function SessionsPage() {
                             <div key={n.id} className={`p-3 rounded border ${n.is_read ? 'opacity-70' : ''}`}>
                                 <div className="font-medium">{n.title}</div>
                                 <div className="text-sm text-muted-foreground">{n.body}</div>
-                                <button
-                                    onClick={() => markNotificationRead(n.id)}
-                                    disabled={n.is_read}
-                                    className="mt-2 text-xs text-primary hover:underline disabled:opacity-60"
-                                >
+                                <button onClick={() => markNotificationRead(n.id)} disabled={n.is_read} className="mt-2 text-xs text-primary hover:underline disabled:opacity-60">
                                     {n.is_read ? 'Read' : 'Mark as read'}
                                 </button>
                             </div>
@@ -279,55 +239,25 @@ export function SessionsPage() {
             <section className="p-4 border rounded-lg space-y-4">
                 <h2 className="text-xl font-semibold">Tutor-Student Chat</h2>
                 <div className="grid md:grid-cols-3 gap-3">
-                    <select
-                        className="h-10 px-3 rounded-md border bg-background"
-                        value={chatCourseId ?? ''}
-                        onChange={(e) => setSelectedCourseId(Number(e.target.value))}
-                    >
+                    <select className="h-10 px-3 rounded-md border bg-background" value={chatCourseId ?? ''} onChange={(e) => setSelectedCourseId(Number(e.target.value))}>
                         <option value="">Select course</option>
-                        {(isTutor ? myCourses : enrolledCourses).map((course) => (
-                            <option key={course.id} value={course.id}>{course.title}</option>
-                        ))}
+                        {(isTutor ? myCourses : enrolledCourses).map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
                     </select>
-
-                    <select
-                        className="h-10 px-3 rounded-md border bg-background"
-                        value={selectedPeerId ?? ''}
-                        onChange={(e) => setSelectedPeerId(Number(e.target.value))}
-                    >
+                    <select className="h-10 px-3 rounded-md border bg-background" value={selectedPeerId ?? ''} onChange={(e) => setSelectedPeerId(Number(e.target.value))}>
                         <option value="">Select chat contact</option>
-                        {contacts.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
-                        ))}
+                        {contacts.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.email})</option>)}
                     </select>
                 </div>
 
                 <div className="h-64 overflow-y-auto border rounded p-3 space-y-2 bg-muted/20">
-                    {messages.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No messages yet.</p>
-                    ) : (
-                        messages.map((m) => (
-                            <div key={m.id} className="text-sm">
-                                <span className="font-medium">#{m.sender_id}</span>: {m.message}
-                            </div>
-                        ))
-                    )}
+                    {messages.length === 0 ? <p className="text-sm text-muted-foreground">No messages yet.</p> : messages.map((m) => (
+                        <div key={m.id} className="text-sm"><span className="font-medium">#{m.sender_id}</span>: {m.message}</div>
+                    ))}
                 </div>
 
                 <div className="flex gap-2">
-                    <input
-                        type="text"
-                        className="flex-1 h-10 px-3 rounded-md border bg-background"
-                        placeholder="Type a message..."
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                    />
-                    <button
-                        onClick={sendMessage}
-                        className="h-10 px-4 rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
-                    >
-                        Send
-                    </button>
+                    <input type="text" className="flex-1 h-10 px-3 rounded-md border bg-background" placeholder="Type a message..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} />
+                    <button onClick={sendMessage} className="h-10 px-4 rounded-md bg-primary text-primary-foreground hover:bg-primary/90">Send</button>
                 </div>
             </section>
         </div>
