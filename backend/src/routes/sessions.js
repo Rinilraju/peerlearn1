@@ -240,6 +240,44 @@ router.post('/:id/end', authenticateToken, async (req, res) => {
     }
 });
 
+router.delete('/:id', authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    try {
+        const result = await db.query('SELECT * FROM course_sessions WHERE id = $1', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Session not found.' });
+        }
+
+        const session = result.rows[0];
+        if (Number(session.instructor_id) !== Number(userId)) {
+            return res.status(403).json({ message: 'Only tutor can delete scheduled sessions.' });
+        }
+        if (session.status !== 'scheduled') {
+            return res.status(400).json({ message: 'Only scheduled sessions can be deleted.' });
+        }
+
+        await db.query('DELETE FROM course_sessions WHERE id = $1', [id]);
+
+        await db.query(
+            `INSERT INTO notifications (user_id, title, body, type)
+             VALUES ($1, 'Session Cancelled', 'Your tutor cancelled a scheduled session.', 'session_cancelled')`,
+            [session.student_id]
+        );
+        const io = req.app.get('io');
+        io?.to(`user:${session.student_id}`).emit('notification', {
+            title: 'Session Cancelled',
+            body: 'Your tutor cancelled a scheduled session.',
+        });
+
+        return res.json({ ok: true });
+    } catch (error) {
+        console.error('Failed to delete session:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
 router.get('/room/:roomId/access', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const { roomId } = req.params;

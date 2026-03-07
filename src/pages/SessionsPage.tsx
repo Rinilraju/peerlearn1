@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api';
 import io, { Socket } from 'socket.io-client';
+import { useAuth } from '../context/AuthContext';
 
 type Course = { id: number; title: string };
 type Student = { id: number; name: string; email: string };
@@ -37,14 +38,14 @@ type Contact = { id: number; name: string; email: string };
 type ChatMessage = { id: number; sender_id: number; receiver_id: number; message: string; created_at: string };
 
 export function SessionsPage() {
+    const { user } = useAuth();
     const [myCourses, setMyCourses] = useState<Course[]>([]);
     const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
     const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
+    const [chatSelectedCourseId, setChatSelectedCourseId] = useState<number | null>(null);
     const [students, setStudents] = useState<Student[]>([]);
     const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
-    const [scheduleDate, setScheduleDate] = useState('');
-    const [scheduleHour, setScheduleHour] = useState('09');
-    const [scheduleMinute, setScheduleMinute] = useState('00');
+    const [scheduleDateTime, setScheduleDateTime] = useState('');
     const [sessions, setSessions] = useState<SessionItem[]>([]);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [contacts, setContacts] = useState<Contact[]>([]);
@@ -57,10 +58,10 @@ export function SessionsPage() {
 
     const isTutor = myCourses.length > 0;
     const chatCourseId = useMemo(() => {
-        if (selectedCourseId) return selectedCourseId;
+        if (chatSelectedCourseId) return chatSelectedCourseId;
         if (isTutor) return myCourses[0]?.id ?? null;
         return enrolledCourses[0]?.id ?? null;
-    }, [selectedCourseId, isTutor, myCourses, enrolledCourses]);
+    }, [chatSelectedCourseId, isTutor, myCourses, enrolledCourses]);
 
     const mapCourses = (rows: any[]) => rows.map((c) => ({ id: Number(c.id), title: c.title }));
 
@@ -161,11 +162,16 @@ export function SessionsPage() {
     }, [chatCourseId, selectedPeerId]);
 
     const scheduleSession = async () => {
-        if (!selectedCourseId || !selectedStudentId || !scheduleDate) {
+        if (!selectedCourseId || !selectedStudentId || !scheduleDateTime) {
             setStatus('Select course, student, and schedule time.');
             return;
         }
-        const scheduledAt = new Date(`${scheduleDate}T${scheduleHour}:${scheduleMinute}:00`).toISOString();
+        const scheduledDate = new Date(scheduleDateTime);
+        if (Number.isNaN(scheduledDate.getTime())) {
+            setStatus('Invalid schedule time.');
+            return;
+        }
+        const scheduledAt = scheduledDate.toISOString();
         try {
             await api.post('/sessions', {
                 courseId: selectedCourseId,
@@ -174,13 +180,27 @@ export function SessionsPage() {
                 durationMinutes: 60,
             });
             setStatus('Session scheduled and student notified.');
-            setScheduleDate('');
-            setScheduleHour('09');
-            setScheduleMinute('00');
+            setScheduleDateTime('');
             await fetchCoreData();
         } catch (error: any) {
             setStatus(error.response?.data?.message || 'Failed to schedule session.');
         }
+    };
+
+    const deleteSession = async (sessionId: number) => {
+        try {
+            await api.delete(`/sessions/${sessionId}`);
+            setStatus('Scheduled session deleted.');
+            await fetchCoreData();
+        } catch (error: any) {
+            setStatus(error.response?.data?.message || 'Failed to delete scheduled session.');
+        }
+    };
+
+    const parseSelectValue = (value: string): number | null => {
+        if (!value) return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
     };
 
     const startLiveClass = async (sessionId: number) => {
@@ -234,39 +254,22 @@ export function SessionsPage() {
                     <h2 className="text-xl font-semibold">Schedule Session For Enrolled Student</h2>
                     <p className="text-xs text-muted-foreground">Times are scheduled in your current local timezone.</p>
                     <div className="grid md:grid-cols-4 gap-3">
-                        <select className="h-10 px-3 rounded-md border bg-background" value={selectedCourseId ?? ''} onChange={(e) => setSelectedCourseId(Number(e.target.value))}>
+                        <select className="h-10 px-3 rounded-md border bg-background" value={selectedCourseId ?? ''} onChange={(e) => setSelectedCourseId(parseSelectValue(e.target.value))}>
                             <option value="">Select course</option>
                             {myCourses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
                         </select>
-                        <select className="h-10 px-3 rounded-md border bg-background" value={selectedStudentId ?? ''} onChange={(e) => setSelectedStudentId(Number(e.target.value))}>
+                        <select className="h-10 px-3 rounded-md border bg-background" value={selectedStudentId ?? ''} onChange={(e) => setSelectedStudentId(parseSelectValue(e.target.value))}>
                             <option value="">Select student</option>
                             {students.map((student) => <option key={student.id} value={student.id}>{student.name} ({student.email})</option>)}
                         </select>
                         <div className="flex gap-2">
                             <input
-                                type="date"
+                                type="datetime-local"
+                                min={new Date(Date.now() + 60 * 1000).toISOString().slice(0, 16)}
                                 className="h-10 px-3 rounded-md border bg-background"
-                                value={scheduleDate}
-                                onChange={(e) => setScheduleDate(e.target.value)}
+                                value={scheduleDateTime}
+                                onChange={(e) => setScheduleDateTime(e.target.value)}
                             />
-                            <select
-                                className="h-10 px-2 rounded-md border bg-background"
-                                value={scheduleHour}
-                                onChange={(e) => setScheduleHour(e.target.value)}
-                            >
-                                {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')).map((h) => (
-                                    <option key={h} value={h}>{h}</option>
-                                ))}
-                            </select>
-                            <select
-                                className="h-10 px-2 rounded-md border bg-background"
-                                value={scheduleMinute}
-                                onChange={(e) => setScheduleMinute(e.target.value)}
-                            >
-                                {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map((m) => (
-                                    <option key={m} value={m}>{m}</option>
-                                ))}
-                            </select>
                         </div>
                         <button onClick={scheduleSession} className="h-10 px-4 rounded-md bg-primary text-primary-foreground hover:bg-primary/90">Schedule</button>
                     </div>
@@ -298,6 +301,14 @@ export function SessionsPage() {
                                     {!session.can_start && !session.can_join && (
                                         <span className="text-xs text-muted-foreground">Waiting for live window/tutor start</span>
                                     )}
+                                    {Number(session.instructor_id) === Number(user?.id) && session.status === 'scheduled' && (
+                                        <button
+                                            onClick={() => deleteSession(session.id)}
+                                            className="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                                        >
+                                            Delete Schedule
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -327,11 +338,11 @@ export function SessionsPage() {
             <section className="p-4 border rounded-lg space-y-4">
                 <h2 className="text-xl font-semibold">Tutor-Student Chat</h2>
                 <div className="grid md:grid-cols-3 gap-3">
-                    <select className="h-10 px-3 rounded-md border bg-background" value={chatCourseId ?? ''} onChange={(e) => setSelectedCourseId(Number(e.target.value))}>
+                    <select className="h-10 px-3 rounded-md border bg-background" value={chatCourseId ?? ''} onChange={(e) => setChatSelectedCourseId(parseSelectValue(e.target.value))}>
                         <option value="">Select course</option>
                         {(isTutor ? myCourses : enrolledCourses).map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
                     </select>
-                    <select className="h-10 px-3 rounded-md border bg-background" value={selectedPeerId ?? ''} onChange={(e) => setSelectedPeerId(Number(e.target.value))}>
+                    <select className="h-10 px-3 rounded-md border bg-background" value={selectedPeerId ?? ''} onChange={(e) => setSelectedPeerId(parseSelectValue(e.target.value))}>
                         <option value="">Select chat contact</option>
                         {contacts.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.email})</option>)}
                     </select>
