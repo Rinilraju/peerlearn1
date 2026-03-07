@@ -262,11 +262,14 @@ router.get('/room/:roomId/access', authenticateToken, async (req, res) => {
             return res.status(403).json({ message: 'You are not allowed to join this room right now.' });
         }
 
+        const participantRole = Number(session.instructor_id) === Number(userId) ? 'instructor' : 'student';
+
         return res.json({
             allowed: true,
             sessionId: session.id,
             roomId: session.meeting_room_id,
             courseTitle: session.course_title,
+            participantRole,
         });
     } catch (error) {
         console.error('Failed to validate room access:', error);
