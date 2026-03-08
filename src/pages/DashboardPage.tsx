@@ -1,9 +1,31 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { CourseCard } from '../components/CourseCard';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+
+type FoundUser = {
+    id: number;
+    name: string;
+    username?: string;
+    role: string;
+};
+
+type ClassRequest = {
+    id: number;
+    requester_id: number;
+    tutor_id: number;
+    topic: string;
+    message?: string;
+    preferred_time?: string;
+    status: 'pending' | 'accepted' | 'rejected';
+    created_at: string;
+    requester_name?: string;
+    requester_username?: string;
+    tutor_name?: string;
+    tutor_username?: string;
+};
 
 export function DashboardPage() {
     const { user } = useAuth();
@@ -11,6 +33,11 @@ export function DashboardPage() {
     const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
     const [recommendedCourses, setRecommendedCourses] = useState<any[]>([]);
     const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
+    const [userSearch, setUserSearch] = useState('');
+    const [foundUsers, setFoundUsers] = useState<FoundUser[]>([]);
+    const [incomingRequests, setIncomingRequests] = useState<ClassRequest[]>([]);
+    const [outgoingRequests, setOutgoingRequests] = useState<ClassRequest[]>([]);
+    const [requestStatus, setRequestStatus] = useState('');
 
     const mapCourse = (course: any) => ({
         ...course,
@@ -48,6 +75,52 @@ export function DashboardPage() {
         fetchDashboardCourses();
     }, [user]);
 
+    useEffect(() => {
+        const fetchRequests = async () => {
+            try {
+                const [incomingRes, outgoingRes] = await Promise.all([
+                    api.get('/class-requests/incoming'),
+                    api.get('/class-requests/outgoing'),
+                ]);
+                setIncomingRequests(incomingRes.data || []);
+                setOutgoingRequests(outgoingRes.data || []);
+            } catch (error) {
+                console.error('Failed to fetch class requests:', error);
+            }
+        };
+        fetchRequests();
+    }, []);
+
+    useEffect(() => {
+        const query = userSearch.trim();
+        if (query.length < 2) {
+            setFoundUsers([]);
+            return;
+        }
+        const timeoutId = window.setTimeout(async () => {
+            try {
+                const res = await api.get(`/users/search?q=${encodeURIComponent(query)}`);
+                setFoundUsers(res.data || []);
+            } catch (error) {
+                console.error('Failed to search users:', error);
+                setFoundUsers([]);
+            }
+        }, 250);
+        return () => window.clearTimeout(timeoutId);
+    }, [userSearch]);
+
+    const updateRequestStatus = async (id: number, status: 'accepted' | 'rejected') => {
+        try {
+            await api.patch(`/class-requests/${id}/status`, { status });
+            setIncomingRequests((prev) => prev.map((item) => (
+                item.id === id ? { ...item, status } : item
+            )));
+            setRequestStatus(`Request ${status}.`);
+        } catch (error: any) {
+            setRequestStatus(error?.response?.data?.message || 'Failed to update request.');
+        }
+    };
+
     return (
         <div className="container mx-auto px-4 py-8 space-y-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -75,6 +148,30 @@ export function DashboardPage() {
                     )}
                 </div>
             </div>
+
+            <section className="p-4 border rounded-lg space-y-3">
+                <h2 className="text-xl font-semibold">Search Users</h2>
+                <div className="relative max-w-xl">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <input
+                        type="text"
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        placeholder="Search by username or name..."
+                        className="w-full h-10 pl-10 pr-3 rounded-md border bg-background"
+                    />
+                </div>
+                {foundUsers.length > 0 && (
+                    <div className="grid sm:grid-cols-2 gap-2">
+                        {foundUsers.map((person) => (
+                            <Link key={person.id} to={`/users/${person.id}`} className="p-3 rounded border hover:bg-muted/40">
+                                <div className="font-medium">{person.username || person.name}</div>
+                                <div className="text-xs text-muted-foreground capitalize">{person.role}</div>
+                            </Link>
+                        ))}
+                    </div>
+                )}
+            </section>
 
             <div className="grid md:grid-cols-3 gap-8">
                 <div className="md:col-span-2 space-y-8">
@@ -124,6 +221,52 @@ export function DashboardPage() {
                 </div>
 
                 <div className="space-y-6">
+                    <section>
+                        <h2 className="text-xl font-bold mb-4">Class Requests</h2>
+                        {requestStatus && <div className="text-xs border rounded p-2 mb-2">{requestStatus}</div>}
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="font-semibold text-sm mb-2">Incoming</h3>
+                                {incomingRequests.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground">No incoming requests.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {incomingRequests.slice(0, 5).map((request) => (
+                                            <div key={request.id} className="p-3 border rounded bg-card space-y-1">
+                                                <div className="text-sm font-medium">{request.requester_username || request.requester_name}</div>
+                                                <div className="text-xs text-muted-foreground">{request.topic}</div>
+                                                {request.message && <div className="text-xs">{request.message}</div>}
+                                                <div className="text-xs capitalize">Status: {request.status}</div>
+                                                {request.status === 'pending' && (
+                                                    <div className="flex gap-2 pt-1">
+                                                        <button onClick={() => updateRequestStatus(request.id, 'accepted')} className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground">Accept</button>
+                                                        <button onClick={() => updateRequestStatus(request.id, 'rejected')} className="text-xs px-2 py-1 rounded border">Reject</button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-sm mb-2">Outgoing</h3>
+                                {outgoingRequests.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground">No outgoing requests.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {outgoingRequests.slice(0, 5).map((request) => (
+                                            <div key={request.id} className="p-3 border rounded bg-card">
+                                                <div className="text-sm font-medium">{request.tutor_username || request.tutor_name}</div>
+                                                <div className="text-xs text-muted-foreground">{request.topic}</div>
+                                                <div className="text-xs capitalize">Status: {request.status}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+
                     <section>
                         <h2 className="text-xl font-bold mb-4">Upcoming Live Sessions</h2>
                         {upcomingSessions.length > 0 ? (

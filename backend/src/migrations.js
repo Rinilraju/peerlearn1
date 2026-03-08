@@ -197,6 +197,31 @@ async function runMigrations() {
             ON course_chat_messages(course_id, sender_id, receiver_id, created_at DESC);
         `);
 
+        // 10. Direct class requests from students to tutors.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS class_requests (
+                id SERIAL PRIMARY KEY,
+                requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                tutor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                topic VARCHAR(255) NOT NULL,
+                message TEXT,
+                preferred_time TIMESTAMP,
+                status VARCHAR(30) NOT NULL DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                responded_at TIMESTAMP
+            );
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_class_requests_tutor_status
+            ON class_requests(tutor_id, status, created_at DESC);
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_class_requests_requester
+            ON class_requests(requester_id, created_at DESC);
+        `);
+
         console.log('Migrations completed successfully.');
     } catch (error) {
         console.error('Migration failed:', error);

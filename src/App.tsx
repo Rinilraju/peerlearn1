@@ -20,6 +20,7 @@ import { ProfileSetupPage } from './pages/ProfileSetupPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { SessionsPage } from './pages/SessionsPage';
+import { UserProfilePage } from './pages/UserProfilePage';
 import { DoubtProvider } from './context/DoubtContext';
 
 import { useAuth } from './context/AuthContext';
@@ -58,6 +59,7 @@ function App() {
                                         <Route path="/sessions" element={<SessionsPage />} />
                                         <Route path="/session/:id" element={<VideoCallPage />} />
                                         <Route path="/settings" element={<SettingsPage />} />
+                                        <Route path="/users/:id" element={<UserProfilePage />} />
                                     </Route>
                                     <Route path="/profile-setup" element={<ProfileSetupPage />} />
                                 </Route>
