@@ -29,6 +29,9 @@ export function Navbar() {
                     </Link>
                     {user ? (
                         <>
+                            <Link to="/create-course" className="text-sm font-medium hover:text-primary transition-colors">
+                                Create Course
+                            </Link>
                             <Link to="/dashboard" className="text-sm font-medium hover:text-primary transition-colors">
                                 Dashboard
                             </Link>
@@ -76,6 +79,13 @@ export function Navbar() {
                         </Link>
                         {user ? (
                             <>
+                                <Link
+                                    to="/create-course"
+                                    className="block text-sm font-medium hover:text-primary transition-colors"
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    Create Course
+                                </Link>
                                 <Link
                                     to="/dashboard"
                                     className="block text-sm font-medium hover:text-primary transition-colors"

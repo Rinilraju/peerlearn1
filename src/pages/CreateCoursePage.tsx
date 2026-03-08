@@ -360,7 +360,7 @@ export function CreateCoursePage() {
                         disabled={quizLoading}
                         className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
-                        {quizLoading ? 'Starting Quiz...' : 'Start Verification Quiz'}
+                        {quizLoading ? 'Starting Quiz...' : 'Create Course (Start Verification Quiz)'}
                     </button>
                 </div>
             </form>
