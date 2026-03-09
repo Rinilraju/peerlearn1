@@ -14,6 +14,7 @@ const QUIZ_DURATION_SECONDS = 10 * 60;
 const QUIZ_PASS_SCORE = 7;
 const QUIZ_TOKEN_EXPIRY_SECONDS = 30 * 60;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const QUIZ_REQUIRE_AI = String(process.env.QUIZ_REQUIRE_AI || 'true').toLowerCase() === 'true';
 
 function shuffle(array) {
     const items = [...array];
@@ -254,6 +255,12 @@ router.post('/verification-quiz/generate', authenticateToken, async (req, res) =
             return res.status(400).json({ message: 'Please enter course title or description to generate topic quiz.' });
         }
 
+        if (QUIZ_REQUIRE_AI && !process.env.OPENAI_API_KEY) {
+            return res.status(503).json({
+                message: 'AI assessment is required but OpenAI API key is not configured on backend.',
+            });
+        }
+
         let selectedQuestions = null;
         let source = 'fallback';
         try {
@@ -263,6 +270,11 @@ router.post('/verification-quiz/generate', authenticateToken, async (req, res) =
             }
         } catch (error) {
             console.error('AI quiz generation failed, using fallback:', error.message);
+            if (QUIZ_REQUIRE_AI) {
+                return res.status(503).json({
+                    message: 'AI assessment is temporarily unavailable. Please try again.',
+                });
+            }
         }
 
         if (!selectedQuestions) {
@@ -276,6 +288,7 @@ router.post('/verification-quiz/generate', authenticateToken, async (req, res) =
             durationSeconds: QUIZ_DURATION_SECONDS,
             questions: attempt.questions,
             source,
+            provider: source === 'ai' ? 'openai' : 'rule-based-fallback',
             rules: {
                 questionCount: QUIZ_QUESTION_COUNT,
                 passScore: QUIZ_PASS_SCORE,
