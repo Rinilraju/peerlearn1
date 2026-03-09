@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CourseCard } from '../components/CourseCard';
 import { Search } from 'lucide-react';
 import api from '../api';
@@ -23,6 +23,7 @@ export function CoursesPage() {
     const [sortBy, setSortBy] = useState<'rating' | 'price'>('rating');
     const [courses, setCourses] = useState<Course[]>([]);
     const [loading, setLoading] = useState(true);
+    const lastTrackedSearchRef = useRef('');
 
     useEffect(() => {
         const fetchCourses = async () => {
@@ -49,6 +50,29 @@ export function CoursesPage() {
 
         fetchCourses();
     }, []);
+
+    useEffect(() => {
+        const query = searchTerm.trim();
+        if (query.length < 2) {
+            return;
+        }
+
+        const timeoutId = window.setTimeout(async () => {
+            const normalized = query.toLowerCase();
+            if (lastTrackedSearchRef.current === normalized) {
+                return;
+            }
+            try {
+                await api.post('/recommendations/track-search', { queryText: query });
+                lastTrackedSearchRef.current = normalized;
+            } catch (error) {
+                // Keep search UX unaffected when analytics tracking fails.
+                console.error('Failed to track search term:', error);
+            }
+        }, 700);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [searchTerm]);
 
     const filteredCourses = courses.filter(course =>
         course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||

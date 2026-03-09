@@ -93,12 +93,36 @@ router.post('/track', authenticateToken, async (req, res) => {
     }
 });
 
+router.post('/track-search', authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    const queryText = String(req.body?.queryText || '').trim();
+
+    if (queryText.length < 2) {
+        return res.status(400).json({ message: 'queryText must be at least 2 characters.' });
+    }
+    if (queryText.length > 255) {
+        return res.status(400).json({ message: 'queryText is too long.' });
+    }
+
+    try {
+        await db.query(
+            `INSERT INTO course_search_events (user_id, query_text)
+             VALUES ($1, $2)`,
+            [userId, queryText]
+        );
+        return res.status(201).json({ ok: true });
+    } catch (error) {
+        console.error('Failed to track search query:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
 router.get('/courses', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const limit = Math.min(Number(req.query.limit) || 4, 20);
 
     try {
-        const [coursesResult, userInteractionsResult, globalInteractionsResult, enrollmentsResult] = await Promise.all([
+        const [coursesResult, userInteractionsResult, globalInteractionsResult, enrollmentsResult, userEnrollmentsResult, userSearchEventsResult] = await Promise.all([
             db.query(
                 `SELECT c.id, c.title, c.description, c.category, c.price, c.thumbnail, c.created_at, c.instructor_id, u.name AS instructor_name
                  FROM courses c
@@ -120,6 +144,20 @@ router.get('/courses', authenticateToken, async (req, res) => {
                 `SELECT course_id, COUNT(*)::int AS enroll_count
                  FROM enrollments
                  GROUP BY course_id`
+            ),
+            db.query(
+                `SELECT course_id
+                 FROM enrollments
+                 WHERE user_id = $1`,
+                [userId]
+            ),
+            db.query(
+                `SELECT query_text
+                 FROM course_search_events
+                 WHERE user_id = $1
+                 ORDER BY created_at DESC
+                 LIMIT 40`,
+                [userId]
             ),
         ]);
 
@@ -161,11 +199,7 @@ router.get('/courses', authenticateToken, async (req, res) => {
         }
 
         const interactedIds = new Set(Array.from(userScoresByCourseId.keys()));
-        const enrolledIds = new Set(
-            userInteractionsResult.rows
-                .filter((r) => r.interaction_type === 'enroll')
-                .map((r) => Number(r.course_id))
-        );
+        const enrolledIds = new Set(userEnrollmentsResult.rows.map((row) => Number(row.course_id)));
 
         const profileCourses = courses.filter((course) => interactedIds.has(Number(course.id)) || enrolledIds.has(Number(course.id)));
         const candidateCourses = courses.filter((course) => (
@@ -173,9 +207,16 @@ router.get('/courses', authenticateToken, async (req, res) => {
             && !enrolledIds.has(Number(course.id))
         ));
 
-        const profileText = profileCourses
-            .map((course) => `${course.title || ''} ${course.description || ''} ${course.category || ''}`)
+        const searchText = userSearchEventsResult.rows
+            .map((row) => row.query_text || '')
             .join(' ');
+
+        const profileText = [
+            profileCourses
+            .map((course) => `${course.title || ''} ${course.description || ''} ${course.category || ''}`)
+            .join(' '),
+            searchText,
+        ].join(' ');
         const profileVector = toVector(tokenize(profileText));
 
         const categoryAffinityRaw = new Map();
@@ -226,13 +267,13 @@ router.get('/courses', authenticateToken, async (req, res) => {
             const categoryScore = Number(category.get(id) || 0);
 
             const score = hasProfile
-                ? (contentScore * 0.40) + (categoryScore * 0.20) + (interestScore * 0.10) + (popularityScore * 0.20) + (freshnessScore * 0.10)
+                ? (contentScore * 0.48) + (categoryScore * 0.22) + (interestScore * 0.10) + (popularityScore * 0.13) + (freshnessScore * 0.07)
                 : (popularityScore * 0.60) + (freshnessScore * 0.40);
 
             const reasonCandidates = [
-                { key: 'content', label: 'Matches your learning interests', value: contentScore },
+                { key: 'content', label: 'Matches your searches and learning interests', value: contentScore },
                 { key: 'category', label: 'Based on categories you prefer', value: categoryScore },
-                { key: 'interest', label: 'Because you engaged with similar courses', value: interestScore },
+                { key: 'interest', label: 'Because you engaged/enrolled in similar courses', value: interestScore },
                 { key: 'popularity', label: 'Popular among learners', value: popularityScore },
                 { key: 'freshness', label: 'Freshly added content', value: freshnessScore },
             ].sort((a, b) => b.value - a.value);

@@ -118,6 +118,20 @@ async function runMigrations() {
         `);
 
         await db.query(`
+            CREATE TABLE IF NOT EXISTS course_search_events (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                query_text VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_course_search_events_user_created
+            ON course_search_events(user_id, created_at DESC);
+        `);
+
+        await db.query(`
             CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_provider_session_unique
             ON payments(provider_session_id)
             WHERE provider_session_id IS NOT NULL;
