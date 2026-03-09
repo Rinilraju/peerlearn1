@@ -38,7 +38,6 @@ export function DashboardPage() {
     const [incomingRequests, setIncomingRequests] = useState<ClassRequest[]>([]);
     const [outgoingRequests, setOutgoingRequests] = useState<ClassRequest[]>([]);
     const [requestStatus, setRequestStatus] = useState('');
-    const [payments, setPayments] = useState<any[]>([]);
 
     const mapCourse = (course: any) => ({
         ...course,
@@ -79,14 +78,12 @@ export function DashboardPage() {
     useEffect(() => {
         const fetchRequests = async () => {
             try {
-                const [incomingRes, outgoingRes, paymentsRes] = await Promise.all([
+                const [incomingRes, outgoingRes] = await Promise.all([
                     api.get('/class-requests/incoming'),
                     api.get('/class-requests/outgoing'),
-                    api.get('/payments/history'),
                 ]);
                 setIncomingRequests(incomingRes.data || []);
                 setOutgoingRequests(outgoingRes.data || []);
-                setPayments(paymentsRes.data || []);
             } catch (error) {
                 console.error('Failed to fetch class requests:', error);
             }
@@ -140,24 +137,6 @@ export function DashboardPage() {
                     >
                         Sessions & Chat
                     </Link>
-                    <Link
-                        to="/learning-path"
-                        className="inline-flex items-center px-4 py-2 border rounded-md hover:bg-muted transition-colors"
-                    >
-                        Learning Path
-                    </Link>
-                    <Link
-                        to="/assignments"
-                        className="inline-flex items-center px-4 py-2 border rounded-md hover:bg-muted transition-colors"
-                    >
-                        Assignments
-                    </Link>
-                    <Link
-                        to="/notifications"
-                        className="inline-flex items-center px-4 py-2 border rounded-md hover:bg-muted transition-colors"
-                    >
-                        Notifications
-                    </Link>
                     {(user?.role === 'tutor' || user?.role === 'admin' || user?.role === 'student') && (
                         <Link
                             to="/create-course"
@@ -165,14 +144,6 @@ export function DashboardPage() {
                         >
                             <Plus className="h-4 w-4 mr-2" />
                             Create New Course
-                        </Link>
-                    )}
-                    {user?.role === 'admin' && (
-                        <Link
-                            to="/admin"
-                            className="inline-flex items-center px-4 py-2 border rounded-md hover:bg-muted transition-colors"
-                        >
-                            Admin
                         </Link>
                     )}
                 </div>
@@ -337,22 +308,6 @@ export function DashboardPage() {
                             </div>
                         </div>
                     </div>
-
-                    <section className="p-4 border rounded-lg bg-card">
-                        <h3 className="font-semibold mb-2">Payment History</h3>
-                        {payments.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">No payment records yet.</p>
-                        ) : (
-                            <div className="space-y-2">
-                                {payments.slice(0, 5).map((p) => (
-                                    <div key={p.id} className="text-xs border rounded p-2">
-                                        <div className="font-medium">{p.course_title}</div>
-                                        <div className="text-muted-foreground">${Number(p.amount || 0).toFixed(2)} | {p.provider} | {p.status}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </section>
                 </div>
             </div>
         </div>

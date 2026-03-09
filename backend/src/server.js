@@ -8,62 +8,9 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5000;
-const db = require('./db');
 
-const allowedOrigin = process.env.CLIENT_URL || '*';
-app.use(cors({
-    origin: allowedOrigin === '*' ? true : allowedOrigin,
-    credentials: true,
-}));
+app.use(cors());
 app.use(express.json());
-
-const ipBucket = new Map();
-const RATE_WINDOW_MS = 60 * 1000;
-const RATE_LIMIT = Number(process.env.RATE_LIMIT_PER_MINUTE || 300);
-
-app.use((req, res, next) => {
-    const now = Date.now();
-    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
-    const entry = ipBucket.get(ip) || { count: 0, resetAt: now + RATE_WINDOW_MS };
-    if (now > entry.resetAt) {
-        entry.count = 0;
-        entry.resetAt = now + RATE_WINDOW_MS;
-    }
-    entry.count += 1;
-    ipBucket.set(ip, entry);
-    if (entry.count > RATE_LIMIT) {
-        return res.status(429).json({ message: 'Too many requests. Please retry later.' });
-    }
-    return next();
-});
-
-app.use((req, res, next) => {
-    const header = req.headers['authorization'];
-    let userId = null;
-    if (header && header.startsWith('Bearer ') && process.env.JWT_SECRET) {
-        try {
-            const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET);
-            userId = decoded?.id || null;
-        } catch (error) {
-            userId = null;
-        }
-    }
-
-    res.on('finish', async () => {
-        if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method)) return;
-        try {
-            await db.query(
-                `INSERT INTO audit_logs (user_id, action, path, method, ip)
-                 VALUES ($1, $2, $3, $4, $5)`,
-                [userId, 'request', req.originalUrl || req.url, req.method, req.ip || null]
-            );
-        } catch (error) {
-            // Do not block responses because of audit logging failures.
-        }
-    });
-
-    next();
-});
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -79,6 +26,8 @@ app.use((req, res, next) => {
 
 
 // Database Connection
+const db = require('./db');
+
 console.log('Attempting to connect to DB...');
 
 const runMigrations = require('./migrations');
@@ -101,14 +50,6 @@ const sessionRoutes = require('./routes/sessions');
 const chatRoutes = require('./routes/chat');
 const userRoutes = require('./routes/users');
 const classRequestRoutes = require('./routes/classRequests');
-const tutorRoutes = require('./routes/tutors');
-const reviewRoutes = require('./routes/reviews');
-const learningPathRoutes = require('./routes/learningPath');
-const assignmentRoutes = require('./routes/assignments');
-const adminRoutes = require('./routes/admin');
-const calendarRoutes = require('./routes/calendar');
-const notificationRoutes = require('./routes/notifications');
-const sessionToolsRoutes = require('./routes/sessionTools');
 
 app.use('/auth', authRoutes);
 app.use('/doubts', doubtRoutes);
@@ -119,14 +60,6 @@ app.use('/sessions', sessionRoutes);
 app.use('/chat', chatRoutes);
 app.use('/users', userRoutes);
 app.use('/class-requests', classRequestRoutes);
-app.use('/tutors', tutorRoutes);
-app.use('/reviews', reviewRoutes);
-app.use('/learning-path', learningPathRoutes);
-app.use('/assignments', assignmentRoutes);
-app.use('/admin', adminRoutes);
-app.use('/calendar', calendarRoutes);
-app.use('/notifications', notificationRoutes);
-app.use('/session-tools', sessionToolsRoutes);
 
 app.get('/', (req, res) => {
     res.send('PeerLearn Backend Running');
@@ -336,24 +269,6 @@ io.on('connection', (socket) => {
         } catch (error) {
             cb?.({ ok: false, message: 'Failed to send message.' });
         }
-    });
-
-    socket.on('join-whiteboard', ({ roomId }) => {
-        const normalizedRoomId = String(roomId || '');
-        if (!normalizedRoomId) return;
-        socket.join(`whiteboard:${normalizedRoomId}`);
-    });
-
-    socket.on('whiteboard-draw', ({ roomId, stroke }) => {
-        const normalizedRoomId = String(roomId || '');
-        if (!normalizedRoomId || !stroke) return;
-        socket.to(`whiteboard:${normalizedRoomId}`).emit('whiteboard-draw', { stroke });
-    });
-
-    socket.on('whiteboard-clear', ({ roomId }) => {
-        const normalizedRoomId = String(roomId || '');
-        if (!normalizedRoomId) return;
-        socket.to(`whiteboard:${normalizedRoomId}`).emit('whiteboard-clear');
     });
 
     socket.on('disconnect', () => {

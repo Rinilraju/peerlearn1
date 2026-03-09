@@ -244,34 +244,9 @@ export function SessionsPage() {
         }
     };
 
-    const downloadCalendar = async () => {
-        try {
-            const res = await api.get('/calendar/my.ics', { responseType: 'blob' });
-            const blob = new Blob([res.data], { type: 'text/calendar;charset=utf-8' });
-            const url = window.URL.createObjectURL(blob);
-            const anchor = document.createElement('a');
-            anchor.href = url;
-            anchor.download = 'peerlearn-sessions.ics';
-            document.body.appendChild(anchor);
-            anchor.click();
-            anchor.remove();
-            window.URL.revokeObjectURL(url);
-        } catch (error) {
-            setStatus('Failed to download calendar.');
-        }
-    };
-
     return (
         <div className="container mx-auto px-4 py-8 space-y-8">
             <h1 className="text-3xl font-bold">Sessions, Notifications & Chat</h1>
-            <div>
-                <button
-                    onClick={downloadCalendar}
-                    className="inline-block text-sm px-3 py-2 rounded border hover:bg-muted"
-                >
-                    Download Calendar (.ics)
-                </button>
-            </div>
             {status && <div className="text-sm bg-secondary/30 border rounded p-3">{status}</div>}
 
             {isTutor && (

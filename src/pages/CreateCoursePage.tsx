@@ -125,15 +125,7 @@ export function CreateCoursePage() {
             setQuizActive(true);
         } catch (error: any) {
             console.error('Error starting quiz:', error);
-            const status = error?.response?.status;
-            const backendMessage = String(error?.response?.data?.message || '').toLowerCase();
-            const isAuthError = status === 401
-                || backendMessage.includes('missing auth token')
-                || backendMessage.includes('invalid auth token')
-                || backendMessage.includes('token expired')
-                || backendMessage.includes('please login again');
-
-            if (isAuthError) {
+            if (error.response?.status === 401 || error.response?.status === 403) {
                 alert('Your login session expired or is invalid. Please login again, then retry.');
                 navigate('/login');
                 return;

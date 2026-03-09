@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
-import io, { Socket } from 'socket.io-client';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,13 +14,8 @@ export function VideoCallPage() {
 
     const [accessError, setAccessError] = useState('');
     const [callStatus, setCallStatus] = useState('Validating session...');
-    const [sessionId, setSessionId] = useState<number | null>(null);
-    const [notes, setNotes] = useState('');
     const containerRef = useRef<HTMLDivElement>(null);
     const zegoRef = useRef<any>(null);
-    const socketRef = useRef<Socket | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const drawingRef = useRef(false);
 
     const canUseZego = Number.isFinite(ZEGO_APP_ID) && ZEGO_APP_ID > 0 && ZEGO_SERVER_SECRET.length > 0;
 
@@ -50,7 +44,6 @@ export function VideoCallPage() {
                 }
 
                 const { roomId: resolvedRoomId, sessionId, participantRole } = accessResponse.data;
-                setSessionId(Number(sessionId));
                 const userId = String(user.id || `user-${Date.now()}`);
                 const userName = user.name || user.email || userId;
                 const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
@@ -87,24 +80,6 @@ export function VideoCallPage() {
                         navigate('/sessions');
                     },
                 });
-
-                const token = localStorage.getItem('token');
-                const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', { auth: { token } });
-                socketRef.current = socket;
-                socket.emit('join-whiteboard', { roomId: resolvedRoomId });
-                socket.on('whiteboard-draw', ({ stroke }) => {
-                    drawStroke(stroke);
-                });
-                socket.on('whiteboard-clear', () => {
-                    clearCanvasLocal();
-                });
-
-                try {
-                    const notesRes = await api.get(`/session-tools/notes/${sessionId}`);
-                    setNotes(notesRes.data?.notes || '');
-                } catch (error) {
-                    // Keep call usable even if notes fetch fails.
-                }
             } catch (error: any) {
                 if (!isMounted) {
                     return;
@@ -122,94 +97,9 @@ export function VideoCallPage() {
             } catch (error) {
                 console.error('Failed to destroy ZEGOCLOUD room:', error);
             }
-            socketRef.current?.disconnect();
-            socketRef.current = null;
             zegoRef.current = null;
         };
     }, [roomId, user, navigate, canUseZego]);
-
-    const resizeCanvas = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = Math.max(1, Math.floor(rect.width));
-        canvas.height = Math.max(1, Math.floor(rect.height));
-    };
-
-    useEffect(() => {
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
-        return () => window.removeEventListener('resize', resizeCanvas);
-    }, []);
-
-    const drawStroke = (stroke: { x0: number; y0: number; x1: number; y1: number; color?: string; width?: number }) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.strokeStyle = stroke.color || '#22c55e';
-        ctx.lineWidth = stroke.width || 2;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(stroke.x0 * canvas.width, stroke.y0 * canvas.height);
-        ctx.lineTo(stroke.x1 * canvas.width, stroke.y1 * canvas.height);
-        ctx.stroke();
-    };
-
-    const clearCanvasLocal = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-    };
-
-    const getNormalizedPoint = (event: PointerEvent<HTMLCanvasElement>) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return null;
-        const rect = canvas.getBoundingClientRect();
-        const x = (event.clientX - rect.left) / rect.width;
-        const y = (event.clientY - rect.top) / rect.height;
-        return { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
-    };
-
-    const lastPointRef = useRef<{ x: number; y: number } | null>(null);
-
-    const onPointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
-        drawingRef.current = true;
-        lastPointRef.current = getNormalizedPoint(event);
-    };
-
-    const onPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
-        if (!drawingRef.current) return;
-        const next = getNormalizedPoint(event);
-        const prev = lastPointRef.current;
-        if (!next || !prev) return;
-        const stroke = { x0: prev.x, y0: prev.y, x1: next.x, y1: next.y, color: '#22c55e', width: 2 };
-        drawStroke(stroke);
-        socketRef.current?.emit('whiteboard-draw', { roomId, stroke });
-        lastPointRef.current = next;
-    };
-
-    const onPointerUp = () => {
-        drawingRef.current = false;
-        lastPointRef.current = null;
-    };
-
-    const clearWhiteboard = () => {
-        clearCanvasLocal();
-        socketRef.current?.emit('whiteboard-clear', { roomId });
-    };
-
-    const saveNotes = async () => {
-        if (!sessionId) return;
-        try {
-            await api.put(`/session-tools/notes/${sessionId}`, { notes });
-            setCallStatus('Notes saved.');
-        } catch (error) {
-            setCallStatus('Failed to save notes.');
-        }
-    };
 
     return (
         <div className="h-[calc(100vh-64px)] flex flex-col bg-slate-950 text-white overflow-hidden">
@@ -227,37 +117,8 @@ export function VideoCallPage() {
                 </div>
             )}
 
-            <div className="flex-1 bg-black grid lg:grid-cols-[2fr_1fr]">
-                <div className="min-h-0">
-                    <div ref={containerRef} className="w-full h-full" />
-                </div>
-                <div className="border-l border-slate-800 bg-slate-900 p-3 space-y-3 overflow-y-auto">
-                    <h3 className="font-semibold text-sm">Live Whiteboard</h3>
-                    <div className="h-56 border border-slate-700 rounded overflow-hidden bg-white">
-                        <canvas
-                            ref={canvasRef}
-                            className="w-full h-full touch-none"
-                            onPointerDown={onPointerDown}
-                            onPointerMove={onPointerMove}
-                            onPointerUp={onPointerUp}
-                            onPointerLeave={onPointerUp}
-                        />
-                    </div>
-                    <button onClick={clearWhiteboard} className="text-xs px-3 py-1 rounded border border-slate-600 hover:bg-slate-800">
-                        Clear Whiteboard
-                    </button>
-
-                    <h3 className="font-semibold text-sm pt-2">Session Notes</h3>
-                    <textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        className="w-full min-h-[140px] px-3 py-2 rounded border border-slate-700 bg-slate-950 text-sm"
-                        placeholder="Write your class notes..."
-                    />
-                    <button onClick={saveNotes} className="text-xs px-3 py-1 rounded bg-primary text-primary-foreground">
-                        Save Notes
-                    </button>
-                </div>
+            <div className="flex-1 bg-black">
+                <div ref={containerRef} className="w-full h-full" />
             </div>
         </div>
     );
