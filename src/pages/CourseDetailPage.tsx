@@ -20,6 +20,11 @@ export function CourseDetailPage() {
     const [isEnrolled, setIsEnrolled] = useState(false);
     const [isPaying, setIsPaying] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
+    const [courseReviews, setCourseReviews] = useState<any[]>([]);
+    const [courseAvgRating, setCourseAvgRating] = useState(0);
+    const [courseReviewCount, setCourseReviewCount] = useState(0);
+    const [reviewRating, setReviewRating] = useState('5');
+    const [reviewComment, setReviewComment] = useState('');
 
     useEffect(() => {
         if (!id) {
@@ -34,6 +39,12 @@ export function CourseDetailPage() {
                     return;
                 }
                 setCourse(courseRes.data);
+                const reviewsRes = await api.get(`/reviews/courses/${id}`);
+                if (active) {
+                    setCourseReviews(reviewsRes.data?.items || []);
+                    setCourseAvgRating(Number(reviewsRes.data?.avg_rating || 0));
+                    setCourseReviewCount(Number(reviewsRes.data?.review_count || 0));
+                }
 
                 const token = localStorage.getItem('token');
                 if (token) {
@@ -119,6 +130,24 @@ export function CourseDetailPage() {
         }
     };
 
+    const submitCourseReview = async () => {
+        if (!id) return;
+        try {
+            await api.post(`/reviews/courses/${id}`, {
+                rating: Number(reviewRating),
+                comment: reviewComment,
+            });
+            const reviewsRes = await api.get(`/reviews/courses/${id}`);
+            setCourseReviews(reviewsRes.data?.items || []);
+            setCourseAvgRating(Number(reviewsRes.data?.avg_rating || 0));
+            setCourseReviewCount(Number(reviewsRes.data?.review_count || 0));
+            setReviewComment('');
+            setStatusMessage('Review submitted.');
+        } catch (error: any) {
+            setStatusMessage(error?.response?.data?.message || 'Failed to submit review.');
+        }
+    };
+
     if (loading) {
         return (
             <div className="container mx-auto px-4 py-8 text-center">
@@ -149,8 +178,8 @@ export function CourseDetailPage() {
                         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                             <div className="flex items-center space-x-1">
                                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                <span className="font-medium text-foreground">4.5</span>
-                                <span>(new course)</span>
+                                <span className="font-medium text-foreground">{courseAvgRating ? courseAvgRating.toFixed(1) : '0.0'}</span>
+                                <span>({courseReviewCount} reviews)</span>
                             </div>
                             <div className="flex items-center space-x-1">
                                 <Users className="h-4 w-4" />
@@ -178,6 +207,43 @@ export function CourseDetailPage() {
                                 <div key={i} className="flex items-start space-x-2">
                                     <CheckCircle className="h-5 w-5 text-primary shrink-0" />
                                     <span className="text-sm">Master practical concepts through guided lessons and projects.</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h2 className="text-2xl font-bold">Ratings & Reviews</h2>
+                        {isEnrolled ? (
+                            <div className="flex gap-2">
+                                <select
+                                    value={reviewRating}
+                                    onChange={(e) => setReviewRating(e.target.value)}
+                                    className="h-10 px-3 rounded-md border bg-background"
+                                >
+                                    {[5, 4, 3, 2, 1].map((v) => <option key={v} value={v}>{v} Star</option>)}
+                                </select>
+                                <input
+                                    value={reviewComment}
+                                    onChange={(e) => setReviewComment(e.target.value)}
+                                    placeholder="Write review"
+                                    className="flex-1 h-10 px-3 rounded-md border bg-background"
+                                />
+                                <button onClick={submitCourseReview} className="h-10 px-4 rounded-md bg-primary text-primary-foreground">
+                                    Submit
+                                </button>
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">Enroll to submit a review.</p>
+                        )}
+
+                        <div className="space-y-2">
+                            {courseReviews.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">No reviews yet.</p>
+                            ) : courseReviews.map((review) => (
+                                <div key={review.id} className="p-3 rounded-md border">
+                                    <div className="text-sm font-medium">{review.reviewer_username || review.reviewer_name} - {review.rating}/5</div>
+                                    {review.comment && <div className="text-sm text-muted-foreground">{review.comment}</div>}
                                 </div>
                             ))}
                         </div>

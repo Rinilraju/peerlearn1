@@ -10,6 +10,8 @@ type Tutor = {
     education_qualification?: string;
     courses_count: number;
     learners_count: number;
+    avg_rating: number;
+    review_count: number;
 };
 
 export function TutorsPage() {
@@ -69,6 +71,9 @@ export function TutorsPage() {
                             <div className="text-sm text-muted-foreground">{tutor.profession || tutor.education_qualification || 'Tutor'}</div>
                             <div className="text-xs text-muted-foreground mt-2">
                                 Courses: {tutor.courses_count} | Learners: {tutor.learners_count}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                                Rating: {Number(tutor.avg_rating || 0).toFixed(1)} ({tutor.review_count})
                             </div>
                         </Link>
                     ))}

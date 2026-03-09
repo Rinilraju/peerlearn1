@@ -17,10 +17,13 @@ router.get('/', async (req, res) => {
                 u.profession,
                 u.education_qualification,
                 COUNT(DISTINCT c.id)::int AS courses_count,
-                COUNT(DISTINCT e.id)::int AS learners_count
+                COUNT(DISTINCT e.id)::int AS learners_count,
+                COALESCE(AVG(tr.rating), 0)::float AS avg_rating,
+                COUNT(DISTINCT tr.id)::int AS review_count
              FROM users u
              LEFT JOIN courses c ON c.instructor_id = u.id
              LEFT JOIN enrollments e ON e.course_id = c.id
+             LEFT JOIN tutor_reviews tr ON tr.tutor_id = u.id
              WHERE u.role IN ('tutor', 'admin')
                AND ($1 = '' OR LOWER(COALESCE(u.username, u.name, '')) LIKE LOWER($2) OR LOWER(COALESCE(u.profession, '')) LIKE LOWER($2))
                AND ($3 = '' OR EXISTS (
@@ -34,7 +37,7 @@ router.get('/', async (req, res) => {
                       )
                ))
              GROUP BY u.id
-             ORDER BY courses_count DESC, learners_count DESC, u.created_at DESC
+             ORDER BY avg_rating DESC, review_count DESC, courses_count DESC, learners_count DESC, u.created_at DESC
              LIMIT 50`,
             [q, `%${q}%`, topic, `%${topic}%`]
         );
@@ -61,10 +64,13 @@ router.get('/:id', async (req, res) => {
                     u.education_qualification,
                     u.role,
                     COUNT(DISTINCT c.id)::int AS courses_count,
-                    COUNT(DISTINCT e.id)::int AS learners_count
+                    COUNT(DISTINCT e.id)::int AS learners_count,
+                    COALESCE(AVG(tr.rating), 0)::float AS avg_rating,
+                    COUNT(DISTINCT tr.id)::int AS review_count
                  FROM users u
                  LEFT JOIN courses c ON c.instructor_id = u.id
                  LEFT JOIN enrollments e ON e.course_id = c.id
+                 LEFT JOIN tutor_reviews tr ON tr.tutor_id = u.id
                  WHERE u.id = $1
                    AND u.role IN ('tutor', 'admin')
                  GROUP BY u.id`,

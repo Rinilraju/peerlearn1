@@ -19,7 +19,17 @@ type TutorDetail = {
     education_qualification?: string;
     courses_count: number;
     learners_count: number;
+    avg_rating: number;
+    review_count: number;
     courses: TutorCourse[];
+};
+
+type TutorReview = {
+    id: number;
+    rating: number;
+    comment?: string;
+    reviewer_name?: string;
+    reviewer_username?: string;
 };
 
 export function TutorDetailPage() {
@@ -31,6 +41,9 @@ export function TutorDetailPage() {
     const [message, setMessage] = useState('');
     const [preferredTime, setPreferredTime] = useState('');
     const [status, setStatus] = useState('');
+    const [reviewRating, setReviewRating] = useState('5');
+    const [reviewComment, setReviewComment] = useState('');
+    const [reviews, setReviews] = useState<TutorReview[]>([]);
 
     const fetchTutor = async () => {
         if (!id) return;
@@ -48,6 +61,13 @@ export function TutorDetailPage() {
 
     useEffect(() => {
         fetchTutor();
+    }, [id]);
+
+    useEffect(() => {
+        if (!id) return;
+        api.get(`/reviews/tutors/${id}`)
+            .then((res) => setReviews(res.data?.items || []))
+            .catch(() => setReviews([]));
     }, [id]);
 
     const sendClassRequest = async () => {
@@ -71,6 +91,26 @@ export function TutorDetailPage() {
         }
     };
 
+    const submitTutorReview = async () => {
+        if (!id) return;
+        try {
+            await api.post(`/reviews/tutors/${id}`, {
+                rating: Number(reviewRating),
+                comment: reviewComment,
+            });
+            setReviewComment('');
+            setStatus('Review submitted.');
+            const [profileRes, reviewsRes] = await Promise.all([
+                api.get(`/tutors/${id}`),
+                api.get(`/reviews/tutors/${id}`),
+            ]);
+            setTutor(profileRes.data);
+            setReviews(reviewsRes.data?.items || []);
+        } catch (error: any) {
+            setStatus(error?.response?.data?.message || 'Failed to submit tutor review.');
+        }
+    };
+
     if (loading) {
         return <div className="container mx-auto px-4 py-8">Loading tutor...</div>;
     }
@@ -86,6 +126,7 @@ export function TutorDetailPage() {
                 <h1 className="text-2xl font-bold">{tutor.username || tutor.name}</h1>
                 <p className="text-sm text-muted-foreground">{tutor.profession || tutor.education_qualification || 'Tutor'}</p>
                 <p className="text-xs text-muted-foreground mt-1">Courses: {tutor.courses_count} | Learners: {tutor.learners_count}</p>
+                <p className="text-xs text-muted-foreground">Rating: {Number(tutor.avg_rating || 0).toFixed(1)} ({tutor.review_count})</p>
             </div>
 
             {!isSelf && (
@@ -115,6 +156,38 @@ export function TutorDetailPage() {
                     {status && <p className="text-sm">{status}</p>}
                 </section>
             )}
+
+            <section className="p-5 rounded-lg border bg-card space-y-3">
+                <h2 className="text-xl font-semibold">Rate This Tutor</h2>
+                <div className="flex gap-2">
+                    <select
+                        value={reviewRating}
+                        onChange={(e) => setReviewRating(e.target.value)}
+                        className="h-10 px-3 rounded-md border bg-background"
+                    >
+                        {[5, 4, 3, 2, 1].map((v) => <option key={v} value={v}>{v} Star</option>)}
+                    </select>
+                    <input
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        placeholder="Write review"
+                        className="flex-1 h-10 px-3 rounded-md border bg-background"
+                    />
+                    <button onClick={submitTutorReview} className="px-4 py-2 rounded-md bg-primary text-primary-foreground">
+                        Submit
+                    </button>
+                </div>
+                <div className="space-y-2">
+                    {reviews.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No reviews yet.</p>
+                    ) : reviews.map((review) => (
+                        <div key={review.id} className="p-2 rounded border">
+                            <div className="text-sm font-medium">{review.reviewer_username || review.reviewer_name} - {review.rating}/5</div>
+                            {review.comment && <div className="text-sm text-muted-foreground">{review.comment}</div>}
+                        </div>
+                    ))}
+                </div>
+            </section>
 
             <section className="p-5 rounded-lg border bg-card space-y-3">
                 <h2 className="text-xl font-semibold">Courses by Tutor</h2>

@@ -236,6 +236,41 @@ async function runMigrations() {
             ON class_requests(requester_id, created_at DESC);
         `);
 
+        // 11. Ratings and reviews for tutors and courses.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS tutor_reviews (
+                id SERIAL PRIMARY KEY,
+                reviewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                tutor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+                comment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(reviewer_id, tutor_id)
+            );
+        `);
+
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS course_reviews (
+                id SERIAL PRIMARY KEY,
+                reviewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+                rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+                comment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(reviewer_id, course_id)
+            );
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_tutor_reviews_tutor
+            ON tutor_reviews(tutor_id, created_at DESC);
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_course_reviews_course
+            ON course_reviews(course_id, created_at DESC);
+        `);
+
         console.log('Migrations completed successfully.');
     } catch (error) {
         console.error('Migration failed:', error);
