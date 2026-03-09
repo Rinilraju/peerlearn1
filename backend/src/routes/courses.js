@@ -13,7 +13,7 @@ const QUIZ_QUESTION_COUNT = 10;
 const QUIZ_DURATION_SECONDS = 10 * 60;
 const QUIZ_PASS_SCORE = 7;
 const QUIZ_TOKEN_EXPIRY_SECONDS = 30 * 60;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const QUIZ_REQUIRE_AI = String(process.env.QUIZ_REQUIRE_AI || 'true').toLowerCase() === 'true';
 
 function shuffle(array) {
@@ -276,7 +276,7 @@ router.post('/verification-quiz/generate', authenticateToken, async (req, res) =
             console.error('AI quiz generation failed, using fallback:', error.message);
             if (QUIZ_REQUIRE_AI) {
                 return res.status(503).json({
-                    message: 'AI assessment is temporarily unavailable. Please try again.',
+                    message: `AI assessment is temporarily unavailable (${error.message}). Please try again.`,
                 });
             }
         }
