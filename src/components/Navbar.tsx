@@ -27,6 +27,9 @@ export function Navbar() {
                     <Link to="/courses" className="text-sm font-medium hover:text-primary transition-colors">
                         Browse Courses
                     </Link>
+                    <Link to="/tutors" className="text-sm font-medium hover:text-primary transition-colors">
+                        Find Tutors
+                    </Link>
                     {user ? (
                         <>
                             <Link to="/create-course" className="text-sm font-medium hover:text-primary transition-colors">
@@ -92,6 +95,13 @@ export function Navbar() {
                                     onClick={() => setIsMenuOpen(false)}
                                 >
                                     Dashboard
+                                </Link>
+                                <Link
+                                    to="/tutors"
+                                    className="block text-sm font-medium hover:text-primary transition-colors"
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    Find Tutors
                                 </Link>
                                 <div className="pt-4 border-t space-y-4">
                                     <div className="flex items-center space-x-2">

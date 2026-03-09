@@ -154,4 +154,22 @@ router.post('/confirm', authenticateToken, async (req, res) => {
     }
 });
 
+router.get('/history', authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    try {
+        const result = await db.query(
+            `SELECT p.id, p.amount, p.currency, p.provider, p.status, p.created_at, c.id AS course_id, c.title AS course_title
+             FROM payments p
+             INNER JOIN courses c ON c.id = p.course_id
+             WHERE p.user_id = $1
+             ORDER BY p.created_at DESC`,
+            [userId]
+        );
+        return res.json(result.rows);
+    } catch (error) {
+        console.error('Failed to fetch payment history:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
 module.exports = router;

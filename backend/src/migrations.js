@@ -236,6 +236,108 @@ async function runMigrations() {
             ON class_requests(requester_id, created_at DESC);
         `);
 
+        // 11. Tutor/course reviews and ratings.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS tutor_reviews (
+                id SERIAL PRIMARY KEY,
+                reviewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                tutor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+                comment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(reviewer_id, tutor_id)
+            );
+        `);
+
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS course_reviews (
+                id SERIAL PRIMARY KEY,
+                reviewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+                rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+                comment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(reviewer_id, course_id)
+            );
+        `);
+
+        // 12. Assignments and submissions.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS course_assignments (
+                id SERIAL PRIMARY KEY,
+                course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+                instructor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title VARCHAR(255) NOT NULL,
+                description TEXT,
+                assignment_type VARCHAR(30) NOT NULL DEFAULT 'homework',
+                quiz_payload JSONB,
+                due_at TIMESTAMP,
+                max_score INTEGER NOT NULL DEFAULT 100,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS assignment_submissions (
+                id SERIAL PRIMARY KEY,
+                assignment_id INTEGER NOT NULL REFERENCES course_assignments(id) ON DELETE CASCADE,
+                student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                content TEXT,
+                quiz_answers JSONB,
+                status VARCHAR(30) NOT NULL DEFAULT 'submitted',
+                score INTEGER,
+                submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                graded_at TIMESTAMP,
+                UNIQUE(assignment_id, student_id)
+            );
+        `);
+
+        // 13. Session notes persistence for live classes.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS session_notes (
+                id SERIAL PRIMARY KEY,
+                session_id INTEGER NOT NULL REFERENCES course_sessions(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                notes TEXT NOT NULL DEFAULT '',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(session_id, user_id)
+            );
+        `);
+
+        // 14. Lightweight audit logs for admin/security visibility.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                action VARCHAR(100) NOT NULL,
+                path VARCHAR(255),
+                method VARCHAR(20),
+                ip VARCHAR(64),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_tutor_reviews_tutor
+            ON tutor_reviews(tutor_id, created_at DESC);
+        `);
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_course_reviews_course
+            ON course_reviews(course_id, created_at DESC);
+        `);
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_assignments_course
+            ON course_assignments(course_id, created_at DESC);
+        `);
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_submissions_student
+            ON assignment_submissions(student_id, submitted_at DESC);
+        `);
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_created
+            ON audit_logs(created_at DESC);
+        `);
+
         console.log('Migrations completed successfully.');
     } catch (error) {
         console.error('Migration failed:', error);
