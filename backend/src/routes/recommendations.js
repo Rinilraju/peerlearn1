@@ -50,6 +50,29 @@ function cosineSimilarity(left, right) {
     return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
 }
 
+function normalizeMap(values) {
+    const arr = Array.from(values.values());
+    if (arr.length === 0) {
+        return new Map();
+    }
+    const min = Math.min(...arr);
+    const max = Math.max(...arr);
+    const range = max - min;
+    const out = new Map();
+    for (const [key, value] of values.entries()) {
+        out.set(key, range === 0 ? 0.5 : (value - min) / range);
+    }
+    return out;
+}
+
+function safeDate(input) {
+    const d = new Date(input);
+    if (Number.isNaN(d.getTime())) {
+        return null;
+    }
+    return d;
+}
+
 router.post('/track', authenticateToken, async (req, res) => {
     const { courseId, interactionType } = req.body;
     const userId = req.user.id;
@@ -75,14 +98,28 @@ router.get('/courses', authenticateToken, async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 4, 20);
 
     try {
-        const [coursesResult, interactionsResult] = await Promise.all([
-            db.query('SELECT id, title, description, category, price, thumbnail FROM courses'),
+        const [coursesResult, userInteractionsResult, globalInteractionsResult, enrollmentsResult] = await Promise.all([
+            db.query(
+                `SELECT c.id, c.title, c.description, c.category, c.price, c.thumbnail, c.created_at, c.instructor_id, u.name AS instructor_name
+                 FROM courses c
+                 LEFT JOIN users u ON u.id = c.instructor_id`
+            ),
             db.query(
                 `SELECT ci.course_id, ci.interaction_type, COUNT(*)::int AS score
                  FROM course_interactions ci
                  WHERE ci.user_id = $1
                  GROUP BY ci.course_id, ci.interaction_type`,
                 [userId]
+            ),
+            db.query(
+                `SELECT ci.course_id, ci.interaction_type, COUNT(*)::int AS score
+                 FROM course_interactions ci
+                 GROUP BY ci.course_id, ci.interaction_type`
+            ),
+            db.query(
+                `SELECT course_id, COUNT(*)::int AS enroll_count
+                 FROM enrollments
+                 GROUP BY course_id`
             ),
         ]);
 
@@ -98,38 +135,114 @@ router.get('/courses', authenticateToken, async (req, res) => {
             enroll: 5,
         };
 
-        const interestScoresByCourseId = new Map();
-        for (const row of interactionsResult.rows) {
+        const userScoresByCourseId = new Map();
+        for (const row of userInteractionsResult.rows) {
             const baseWeight = interactionWeights[row.interaction_type] || 1;
             const score = Number(row.score) * baseWeight;
-            interestScoresByCourseId.set(
+            userScoresByCourseId.set(
                 Number(row.course_id),
-                (interestScoresByCourseId.get(Number(row.course_id)) || 0) + score
+                (userScoresByCourseId.get(Number(row.course_id)) || 0) + score
             );
         }
 
-        const interactedIds = new Set(Array.from(interestScoresByCourseId.keys()));
-        const profileCourses = courses.filter((course) => interactedIds.has(Number(course.id)));
-        const candidateCourses = courses.filter((course) => !interactedIds.has(Number(course.id)));
+        const globalScoresByCourseId = new Map();
+        for (const row of globalInteractionsResult.rows) {
+            const baseWeight = interactionWeights[row.interaction_type] || 1;
+            const score = Number(row.score) * baseWeight;
+            globalScoresByCourseId.set(
+                Number(row.course_id),
+                (globalScoresByCourseId.get(Number(row.course_id)) || 0) + score
+            );
+        }
+
+        const enrollmentsByCourseId = new Map();
+        for (const row of enrollmentsResult.rows) {
+            enrollmentsByCourseId.set(Number(row.course_id), Number(row.enroll_count) || 0);
+        }
+
+        const interactedIds = new Set(Array.from(userScoresByCourseId.keys()));
+        const enrolledIds = new Set(
+            userInteractionsResult.rows
+                .filter((r) => r.interaction_type === 'enroll')
+                .map((r) => Number(r.course_id))
+        );
+
+        const profileCourses = courses.filter((course) => interactedIds.has(Number(course.id)) || enrolledIds.has(Number(course.id)));
+        const candidateCourses = courses.filter((course) => (
+            Number(course.instructor_id) !== Number(userId)
+            && !enrolledIds.has(Number(course.id))
+        ));
 
         const profileText = profileCourses
             .map((course) => `${course.title || ''} ${course.description || ''} ${course.category || ''}`)
             .join(' ');
-
         const profileVector = toVector(tokenize(profileText));
 
-        const scored = candidateCourses.map((course) => {
+        const categoryAffinityRaw = new Map();
+        for (const course of profileCourses) {
+            const category = String(course.category || 'general').toLowerCase();
+            const weight = Number(userScoresByCourseId.get(Number(course.id)) || 1);
+            categoryAffinityRaw.set(category, (categoryAffinityRaw.get(category) || 0) + weight);
+        }
+        const maxCategoryAffinity = Math.max(1, ...Array.from(categoryAffinityRaw.values()));
+
+        const contentRaw = new Map();
+        const popularityRaw = new Map();
+        const freshnessRaw = new Map();
+        const interestRaw = new Map();
+        const categoryRaw = new Map();
+
+        for (const course of candidateCourses) {
             const tokenVector = toVector(tokenize(`${course.title || ''} ${course.description || ''} ${course.category || ''}`));
             const contentSimilarity = cosineSimilarity(profileVector, tokenVector);
-            const popularityBoost = Math.log10(1 + (Number(interestScoresByCourseId.get(Number(course.id))) || 0));
+            contentRaw.set(Number(course.id), contentSimilarity);
 
-            // If user has no history, fall back to popularity/newness ordering using a base score.
-            const hasProfile = profileVector.size > 0;
-            const score = hasProfile ? contentSimilarity * 0.85 + popularityBoost * 0.15 : 0.01 + popularityBoost;
+            const globalInteractions = Number(globalScoresByCourseId.get(Number(course.id)) || 0);
+            const globalEnrollments = Number(enrollmentsByCourseId.get(Number(course.id)) || 0);
+            popularityRaw.set(Number(course.id), Math.log10(1 + globalInteractions + (globalEnrollments * 2)));
 
+            const createdAt = safeDate(course.created_at);
+            const ageDays = createdAt ? Math.max(0, (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24)) : 365;
+            freshnessRaw.set(Number(course.id), Math.exp(-ageDays / 60));
+
+            interestRaw.set(Number(course.id), Math.log10(1 + Number(userScoresByCourseId.get(Number(course.id)) || 0)));
+            const category = String(course.category || 'general').toLowerCase();
+            categoryRaw.set(Number(course.id), (categoryAffinityRaw.get(category) || 0) / maxCategoryAffinity);
+        }
+
+        const content = normalizeMap(contentRaw);
+        const popularity = normalizeMap(popularityRaw);
+        const freshness = normalizeMap(freshnessRaw);
+        const interest = normalizeMap(interestRaw);
+        const category = normalizeMap(categoryRaw);
+
+        const hasProfile = profileVector.size > 0 || profileCourses.length > 0;
+        const scored = candidateCourses.map((course) => {
+            const id = Number(course.id);
+            const contentScore = Number(content.get(id) || 0);
+            const popularityScore = Number(popularity.get(id) || 0);
+            const freshnessScore = Number(freshness.get(id) || 0);
+            const interestScore = Number(interest.get(id) || 0);
+            const categoryScore = Number(category.get(id) || 0);
+
+            const score = hasProfile
+                ? (contentScore * 0.40) + (categoryScore * 0.20) + (interestScore * 0.10) + (popularityScore * 0.20) + (freshnessScore * 0.10)
+                : (popularityScore * 0.60) + (freshnessScore * 0.40);
+
+            const reasonCandidates = [
+                { key: 'content', label: 'Matches your learning interests', value: contentScore },
+                { key: 'category', label: 'Based on categories you prefer', value: categoryScore },
+                { key: 'interest', label: 'Because you engaged with similar courses', value: interestScore },
+                { key: 'popularity', label: 'Popular among learners', value: popularityScore },
+                { key: 'freshness', label: 'Freshly added content', value: freshnessScore },
+            ].sort((a, b) => b.value - a.value);
+
+            const confidence = Math.round(Math.max(0, Math.min(100, score * 100)));
             return {
                 ...course,
                 recommendation_score: score,
+                recommendation_confidence: confidence,
+                recommendation_reason: reasonCandidates[0]?.label || 'Recommended for you',
             };
         });
 

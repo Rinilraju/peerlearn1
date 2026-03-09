@@ -29,6 +29,13 @@ export function CourseCard({ course }: CourseCardProps) {
                         {course.description}
                     </p>
 
+                    {(course as any).recommendation_reason && (
+                        <div className="text-[11px] rounded-md border bg-primary/5 text-primary px-2 py-1">
+                            {(course as any).recommendation_reason}
+                            {(course as any).recommendation_confidence ? ` (${(course as any).recommendation_confidence}% match)` : ''}
+                        </div>
+                    )}
+
                     <div className="flex items-center justify-between text-xs text-muted-foreground pt-2">
                         <div className="flex items-center space-x-1">
                             <Users className="h-3 w-3" />
