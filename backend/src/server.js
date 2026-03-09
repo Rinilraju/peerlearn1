@@ -50,6 +50,7 @@ const sessionRoutes = require('./routes/sessions');
 const chatRoutes = require('./routes/chat');
 const userRoutes = require('./routes/users');
 const classRequestRoutes = require('./routes/classRequests');
+const tutorRoutes = require('./routes/tutors');
 
 app.use('/auth', authRoutes);
 app.use('/doubts', doubtRoutes);
@@ -60,6 +61,7 @@ app.use('/sessions', sessionRoutes);
 app.use('/chat', chatRoutes);
 app.use('/users', userRoutes);
 app.use('/class-requests', classRequestRoutes);
+app.use('/tutors', tutorRoutes);
 
 app.get('/', (req, res) => {
     res.send('PeerLearn Backend Running');
