@@ -140,9 +140,25 @@ router.get('/courses', authenticateToken, async (req, res) => {
     try {
         const [coursesResult, userInteractionsResult, globalInteractionsResult, enrollmentsResult, userEnrollmentsResult, userSearchEventsResult] = await Promise.all([
             db.query(
-                `SELECT c.id, c.title, c.description, c.category, c.price, c.thumbnail, c.created_at, c.instructor_id, u.name AS instructor_name
+                `SELECT c.id, c.title, c.description, c.category, c.price, c.thumbnail, c.created_at, c.instructor_id,
+                        u.name AS instructor_name,
+                        COALESCE(cr.avg_rating, 0) AS avg_rating,
+                        COALESCE(cr.review_count, 0) AS review_count,
+                        COALESCE(e.enroll_count, 0) AS enroll_count
                  FROM courses c
-                 LEFT JOIN users u ON u.id = c.instructor_id`
+                 LEFT JOIN users u ON u.id = c.instructor_id
+                 LEFT JOIN (
+                    SELECT course_id,
+                           COALESCE(AVG(rating), 0)::float AS avg_rating,
+                           COUNT(*)::int AS review_count
+                    FROM course_reviews
+                    GROUP BY course_id
+                 ) cr ON cr.course_id = c.id
+                 LEFT JOIN (
+                    SELECT course_id, COUNT(*)::int AS enroll_count
+                    FROM enrollments
+                    GROUP BY course_id
+                 ) e ON e.course_id = c.id`
             ),
             db.query(
                 `SELECT ci.course_id, ci.interaction_type, COUNT(*)::int AS score

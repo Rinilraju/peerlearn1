@@ -45,9 +45,9 @@ export function DashboardPage() {
         description: (String(course.description || '').trim() || 'Description will be updated soon.'),
         image: course.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=60',
         price: parseFloat(course.price) || 0,
-        rating: 4.5,
-        reviews: 0,
-        enrolled: 0,
+        rating: Number(course.avg_rating || 0),
+        reviews: Number(course.review_count || 0),
+        enrolled: Number(course.enroll_count || 0),
         instructor: course.instructor_name || user?.name || 'PeerLearn Instructor',
     });
 

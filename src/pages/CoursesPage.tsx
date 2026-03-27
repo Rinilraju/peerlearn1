@@ -16,6 +16,9 @@ interface Course {
     instructor?: string;
     // Map backend fields to frontend expected fields
     image?: string;
+    avg_rating?: number;
+    review_count?: number;
+    enroll_count?: number;
 }
 
 export function CoursesPage() {
@@ -37,9 +40,9 @@ export function CoursesPage() {
                     image: c.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=60',
                     price: parseFloat(c.price) || 0,
                     category: c.category || 'General',
-                    rating: 4.5, // Mock
-                    reviews: 0, // Mock
-                    enrolled: 0, // Default for new courses
+                    rating: Number(c.avg_rating || 0),
+                    reviews: Number(c.review_count || 0),
+                    enrolled: Number(c.enroll_count || 0),
                     instructor: c.instructor_name || 'PeerLearn Instructor'
                 }));
                 setCourses(mappedCourses);
