@@ -1,6 +1,9 @@
 const express = require('express');
 const { Pool } = require('pg');
 const authenticateToken = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const jwt = require('jsonwebtoken');
 // Auth middleware optional for viewing courses, required for creating?
 // Assuming admin or open for now, let's just make it public to view.
@@ -8,6 +11,38 @@ const jwt = require('jsonwebtoken');
 const router = express.Router();
 const db = require('../db');
 const verificationAttempts = new Map();
+
+const uploadDir = path.join(__dirname, '..', '..', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const upload = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => cb(null, uploadDir),
+        filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
+            const name = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+            cb(null, name);
+        },
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+            cb(new Error('Only image uploads are allowed.'));
+            return;
+        }
+        cb(null, true);
+    },
+});
+
+router.post('/upload-thumbnail', authenticateToken, upload.single('thumbnail'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: 'Thumbnail file is required.' });
+    }
+    const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    return res.json({ url });
+});
 
 const QUIZ_QUESTION_COUNT = 10;
 const QUIZ_DURATION_SECONDS = 10 * 60;

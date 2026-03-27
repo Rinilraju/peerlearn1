@@ -21,6 +21,8 @@ export function CreateCoursePage() {
     const [quizStatus, setQuizStatus] = useState('');
     const [tabSwitchCount, setTabSwitchCount] = useState(0);
     const [copyCount, setCopyCount] = useState(0);
+    const [thumbnailUploading, setThumbnailUploading] = useState(false);
+    const [thumbnailError, setThumbnailError] = useState('');
 
     const [formData, setFormData] = useState({
         title: '',
@@ -38,6 +40,29 @@ export function CreateCoursePage() {
             ...prev,
             [name]: value
         }));
+    };
+
+    const handleThumbnailUpload = async (file: File | null) => {
+        if (!file) return;
+        setThumbnailUploading(true);
+        setThumbnailError('');
+        try {
+            const form = new FormData();
+            form.append('thumbnail', file);
+            const res = await api.post('/courses/upload-thumbnail', form, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const uploadedUrl = res.data?.url;
+            if (uploadedUrl) {
+                setFormData((prev) => ({ ...prev, thumbnail: uploadedUrl }));
+            } else {
+                setThumbnailError('Upload failed. No URL returned.');
+            }
+        } catch (error: any) {
+            setThumbnailError(error.response?.data?.message || 'Failed to upload thumbnail.');
+        } finally {
+            setThumbnailUploading(false);
+        }
     };
 
     React.useEffect(() => {
@@ -359,6 +384,15 @@ export function CreateCoursePage() {
                         className="w-full h-10 px-3 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder="https://example.com/image.jpg"
                     />
+                    <div className="text-xs text-muted-foreground">Or upload an image file:</div>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleThumbnailUpload(e.target.files?.[0] || null)}
+                        className="w-full h-10 px-3 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    {thumbnailUploading && <div className="text-xs text-muted-foreground">Uploading thumbnail...</div>}
+                    {thumbnailError && <div className="text-xs text-red-500">{thumbnailError}</div>}
                     {/* <div className="border-2 border-dashed rounded-lg p-8 text-center hover:bg-muted/50 transition-colors cursor-pointer">
                         <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                         <p className="text-sm text-muted-foreground">Drag and drop or click to upload</p>

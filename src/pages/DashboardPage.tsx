@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { CourseCard } from '../components/CourseCard';
-import { Plus, Search } from 'lucide-react';
+import { ArrowRight, Calendar, MessageCircle, Plus, Search, Video } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 
@@ -132,7 +132,7 @@ export function DashboardPage() {
                         Welcome back, {user?.name}! Here's what's happening today.
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Link
                         to="/sessions"
                         className="inline-flex items-center px-4 py-2 border rounded-md hover:bg-muted transition-colors"
@@ -150,6 +150,59 @@ export function DashboardPage() {
                     )}
                 </div>
             </div>
+
+            <section className="grid lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2 p-4 border rounded-lg bg-gradient-to-r from-primary/10 via-transparent to-secondary/10">
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <div>
+                            <div className="text-xs uppercase tracking-wide text-muted-foreground">Quick Start</div>
+                            <h2 className="text-xl font-semibold">Your next best step</h2>
+                            <p className="text-sm text-muted-foreground">
+                                Follow this flow to get value fast: explore, enroll, schedule, and join live.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Link to="/courses" className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm">
+                                Browse Courses <ArrowRight className="h-4 w-4" />
+                            </Link>
+                            <Link to="/sessions" className="inline-flex items-center gap-2 px-3 py-2 rounded-md border text-sm">
+                                Open Sessions & Chat
+                            </Link>
+                        </div>
+                    </div>
+                    <div className="mt-4 grid sm:grid-cols-3 gap-3 text-sm">
+                        <div className="p-3 rounded-md border bg-card">
+                            <div className="font-semibold">1. Explore</div>
+                            <div className="text-muted-foreground">Find a course that matches your goals.</div>
+                        </div>
+                        <div className="p-3 rounded-md border bg-card">
+                            <div className="font-semibold">2. Enroll</div>
+                            <div className="text-muted-foreground">Join and unlock tutor sessions.</div>
+                        </div>
+                        <div className="p-3 rounded-md border bg-card">
+                            <div className="font-semibold">3. Go Live</div>
+                            <div className="text-muted-foreground">Schedule and attend 1:1 sessions.</div>
+                        </div>
+                    </div>
+                </div>
+                <div className="p-4 border rounded-lg bg-card space-y-3">
+                    <div className="flex items-center gap-2">
+                        <Video className="h-5 w-5 text-primary" />
+                        <h3 className="text-lg font-semibold">Sessions & Chat Hub</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                        All your scheduled classes and tutor chats live here.
+                    </p>
+                    <ul className="text-sm space-y-2">
+                        <li className="flex items-center gap-2"><Calendar className="h-4 w-4 text-secondary" />Schedule 1:1 sessions</li>
+                        <li className="flex items-center gap-2"><MessageCircle className="h-4 w-4 text-secondary" />Message tutors instantly</li>
+                        <li className="flex items-center gap-2"><Video className="h-4 w-4 text-secondary" />Join live video at the right time</li>
+                    </ul>
+                    <Link to="/sessions" className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
+                        Open Sessions & Chat <ArrowRight className="h-4 w-4" />
+                    </Link>
+                </div>
+            </section>
 
             <section className="p-4 border rounded-lg space-y-3">
                 <h2 className="text-xl font-semibold">Search Users</h2>
@@ -270,7 +323,10 @@ export function DashboardPage() {
                     </section>
 
                     <section>
-                        <h2 className="text-xl font-bold mb-4">Upcoming Live Sessions</h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold">Upcoming Live Sessions</h2>
+                            <Link to="/sessions" className="text-primary text-sm hover:underline">Manage</Link>
+                        </div>
                         {upcomingSessions.length > 0 ? (
                             <div className="space-y-3">
                                 {upcomingSessions.map((session) => (
@@ -285,7 +341,12 @@ export function DashboardPage() {
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-sm text-muted-foreground">No upcoming sessions.</p>
+                            <div className="text-sm text-muted-foreground space-y-2">
+                                <div>No upcoming sessions yet.</div>
+                                <Link to="/sessions" className="inline-flex items-center gap-2 text-primary hover:underline">
+                                    Schedule or join a session <ArrowRight className="h-4 w-4" />
+                                </Link>
+                            </div>
                         )}
                     </section>
 

@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('crypto');
+const path = require('path');
 
 dotenv.config();
 
@@ -11,6 +12,7 @@ const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // Request logging middleware
 app.use((req, res, next) => {
