@@ -28,7 +28,8 @@ export function CreateCoursePage() {
         price: '',
         category: 'Development',
         video_url: '',
-        thumbnail: ''
+        thumbnail: '',
+        total_sessions: '1'
     });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -162,6 +163,7 @@ export function CreateCoursePage() {
             await api.post('/courses', {
                 ...formData,
                 price: parseFloat(formData.price) || 0,
+                total_sessions: Number(formData.total_sessions || 1),
             }, {
                 headers: {
                     'X-Course-Verification-Token': res.data.verificationToken,
@@ -317,6 +319,22 @@ export function CreateCoursePage() {
                             <option value="Marketing">Marketing</option>
                         </select>
                     </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Total Sessions Included</label>
+                    <input
+                        type="number"
+                        name="total_sessions"
+                        min="1"
+                        max="200"
+                        step="1"
+                        required
+                        value={formData.total_sessions}
+                        onChange={handleChange}
+                        className="w-full h-10 px-3 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        placeholder="e.g. 8"
+                    />
                 </div>
 
                 <div className="space-y-2">

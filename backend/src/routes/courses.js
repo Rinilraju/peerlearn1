@@ -429,10 +429,25 @@ router.get('/enrolled', authenticateToken, async (req, res) => {
 router.get('/:id/enrollment', authenticateToken, async (req, res) => {
     try {
         const result = await db.query(
-            'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
+            `SELECT e.id, e.sessions_completed, c.total_sessions
+             FROM enrollments e
+             INNER JOIN courses c ON c.id = e.course_id
+             WHERE e.user_id = $1 AND e.course_id = $2`,
             [req.user.id, req.params.id]
         );
-        res.json({ enrolled: result.rows.length > 0 });
+        if (result.rows.length === 0) {
+            return res.json({ enrolled: false });
+        }
+        const row = result.rows[0];
+        const totalSessions = Number(row.total_sessions || 1);
+        const completed = Number(row.sessions_completed || 0);
+        return res.json({
+            enrolled: true,
+            sessions_completed: completed,
+            total_sessions: totalSessions,
+            sessions_remaining: Math.max(0, totalSessions - completed),
+            course_completed: completed >= totalSessions,
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
@@ -453,11 +468,20 @@ router.get('/:id', async (req, res) => {
 
 // Create a new course
 router.post('/', authenticateToken, async (req, res) => {
-    const { title, description, price, category, video_url, thumbnail } = req.body;
+    const { title, description, price, category, video_url, thumbnail, total_sessions } = req.body;
     const instructor_id = req.user.id; // From auth middleware
     const verificationToken = req.headers['x-course-verification-token'];
 
     try {
+        const safeTitle = String(title || '').trim();
+        const safeDescription = String(description || '').trim();
+        if (safeTitle.length < 3) {
+            return res.status(400).json({ message: 'Course title must be at least 3 characters.' });
+        }
+        if (safeDescription.length < 12) {
+            return res.status(400).json({ message: 'Course description must be at least 12 characters.' });
+        }
+
         if (!verificationToken) {
             return res.status(403).json({ message: 'Tutor verification quiz is required before creating a course.' });
         }
@@ -481,10 +505,15 @@ router.post('/', authenticateToken, async (req, res) => {
             return res.status(403).json({ message: 'Course verification quiz not passed.' });
         }
 
-        console.log('Creating course with data:', { title, price, category, instructor_id });
+        const totalSessions = Number(total_sessions || 1);
+        if (!Number.isInteger(totalSessions) || totalSessions < 1 || totalSessions > 200) {
+            return res.status(400).json({ message: 'total_sessions must be between 1 and 200.' });
+        }
+
+        console.log('Creating course with data:', { title, price, category, instructor_id, totalSessions });
         const result = await db.query(
-            'INSERT INTO courses (title, description, price, category, instructor_id, video_url, thumbnail) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [title, description, price, category, instructor_id, video_url, thumbnail]
+            'INSERT INTO courses (title, description, price, category, instructor_id, video_url, thumbnail, total_sessions) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+            [safeTitle, safeDescription, price, category, instructor_id, video_url, thumbnail, totalSessions]
         );
         await db.query(
             `UPDATE users

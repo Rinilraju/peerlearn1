@@ -73,6 +73,22 @@ function safeDate(input) {
     return d;
 }
 
+function normalizeWhitespace(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function isPlaceholderText(value) {
+    const v = normalizeWhitespace(value).toLowerCase();
+    if (!v) return true;
+    return ['nothing', 'none', 'n/a', 'na', 'test', 'tbd', 'null', 'undefined'].includes(v);
+}
+
+function isMeaningfulText(value, minLen = 4) {
+    const cleaned = normalizeWhitespace(value);
+    if (cleaned.length < minLen) return false;
+    return !isPlaceholderText(cleaned);
+}
+
 router.post('/track', authenticateToken, async (req, res) => {
     const { courseId, interactionType } = req.body;
     const userId = req.user.id;
@@ -161,7 +177,11 @@ router.get('/courses', authenticateToken, async (req, res) => {
             ),
         ]);
 
-        const courses = coursesResult.rows;
+        const rawCourses = coursesResult.rows;
+        const courses = rawCourses.filter((course) => (
+            isMeaningfulText(course.title, 3)
+            && isMeaningfulText(course.description, 12)
+        ));
         if (courses.length === 0) {
             return res.json([]);
         }
@@ -170,7 +190,7 @@ router.get('/courses', authenticateToken, async (req, res) => {
             view: 1,
             click: 2,
             wishlist: 3,
-            enroll: 5,
+            enroll: 6,
         };
 
         const userScoresByCourseId = new Map();
@@ -181,6 +201,12 @@ router.get('/courses', authenticateToken, async (req, res) => {
                 Number(row.course_id),
                 (userScoresByCourseId.get(Number(row.course_id)) || 0) + score
             );
+        }
+
+        // Enrollments are strong intent signals even without explicit interaction tracking.
+        for (const row of userEnrollmentsResult.rows) {
+            const courseId = Number(row.course_id);
+            userScoresByCourseId.set(courseId, (userScoresByCourseId.get(courseId) || 0) + 8);
         }
 
         const globalScoresByCourseId = new Map();
@@ -210,6 +236,7 @@ router.get('/courses', authenticateToken, async (req, res) => {
         const searchText = userSearchEventsResult.rows
             .map((row) => row.query_text || '')
             .join(' ');
+        const searchVector = toVector(tokenize(searchText));
 
         const profileText = [
             profileCourses
@@ -228,6 +255,7 @@ router.get('/courses', authenticateToken, async (req, res) => {
         const maxCategoryAffinity = Math.max(1, ...Array.from(categoryAffinityRaw.values()));
 
         const contentRaw = new Map();
+        const searchRaw = new Map();
         const popularityRaw = new Map();
         const freshnessRaw = new Map();
         const interestRaw = new Map();
@@ -237,6 +265,8 @@ router.get('/courses', authenticateToken, async (req, res) => {
             const tokenVector = toVector(tokenize(`${course.title || ''} ${course.description || ''} ${course.category || ''}`));
             const contentSimilarity = cosineSimilarity(profileVector, tokenVector);
             contentRaw.set(Number(course.id), contentSimilarity);
+            const searchSimilarity = searchVector.size > 0 ? cosineSimilarity(searchVector, tokenVector) : 0;
+            searchRaw.set(Number(course.id), searchSimilarity);
 
             const globalInteractions = Number(globalScoresByCourseId.get(Number(course.id)) || 0);
             const globalEnrollments = Number(enrollmentsByCourseId.get(Number(course.id)) || 0);
@@ -252,6 +282,7 @@ router.get('/courses', authenticateToken, async (req, res) => {
         }
 
         const content = normalizeMap(contentRaw);
+        const search = normalizeMap(searchRaw);
         const popularity = normalizeMap(popularityRaw);
         const freshness = normalizeMap(freshnessRaw);
         const interest = normalizeMap(interestRaw);
@@ -261,17 +292,19 @@ router.get('/courses', authenticateToken, async (req, res) => {
         const scored = candidateCourses.map((course) => {
             const id = Number(course.id);
             const contentScore = Number(content.get(id) || 0);
+            const searchScore = Number(search.get(id) || 0);
             const popularityScore = Number(popularity.get(id) || 0);
             const freshnessScore = Number(freshness.get(id) || 0);
             const interestScore = Number(interest.get(id) || 0);
             const categoryScore = Number(category.get(id) || 0);
 
             const score = hasProfile
-                ? (contentScore * 0.48) + (categoryScore * 0.22) + (interestScore * 0.10) + (popularityScore * 0.13) + (freshnessScore * 0.07)
+                ? (contentScore * 0.38) + (searchScore * 0.20) + (categoryScore * 0.18) + (interestScore * 0.10) + (popularityScore * 0.10) + (freshnessScore * 0.04)
                 : (popularityScore * 0.60) + (freshnessScore * 0.40);
 
             const reasonCandidates = [
                 { key: 'content', label: 'Matches your searches and learning interests', value: contentScore },
+                { key: 'search', label: 'Matches topics you searched', value: searchScore },
                 { key: 'category', label: 'Based on categories you prefer', value: categoryScore },
                 { key: 'interest', label: 'Because you engaged/enrolled in similar courses', value: interestScore },
                 { key: 'popularity', label: 'Popular among learners', value: popularityScore },

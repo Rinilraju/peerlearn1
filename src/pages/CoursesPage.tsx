@@ -32,6 +32,8 @@ export function CoursesPage() {
                 // Transform data to match UI needs
                 const mappedCourses = response.data.map((c: any) => ({
                     ...c,
+                    title: (String(c.title || '').trim() || 'Untitled Course'),
+                    description: (String(c.description || '').trim() || 'Description will be updated soon.'),
                     image: c.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=60',
                     price: parseFloat(c.price) || 0,
                     category: c.category || 'General',

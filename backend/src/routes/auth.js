@@ -4,9 +4,67 @@ const jwt = require('jsonwebtoken');
 
 const router = express.Router();
 const db = require('../db');
+const PRIMARY_ADMIN_EMAIL = 'madasseryraju@gmail.com';
 
 function normalizeEmail(email) {
     return String(email || '').trim().toLowerCase();
+}
+
+async function authenticateUserByEmailPassword(email, password) {
+    const normalizedEmail = normalizeEmail(email);
+    const submittedPassword = String(password || '');
+
+    const userResult = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [normalizedEmail]);
+    if (userResult.rows.length === 0) {
+        return { ok: false, status: 400, message: 'Invalid credentials' };
+    }
+
+    const user = userResult.rows[0];
+    if (!user.is_verified) {
+        await db.query('UPDATE users SET is_verified = TRUE, verification_code = NULL WHERE id = $1', [user.id]);
+    }
+
+    let isMatch = await bcrypt.compare(submittedPassword, user.password);
+    if (!isMatch && submittedPassword.trim() !== submittedPassword) {
+        isMatch = await bcrypt.compare(submittedPassword.trim(), user.password);
+    }
+    if (!isMatch) {
+        return { ok: false, status: 400, message: 'Invalid credentials' };
+    }
+
+    const isSuspended = Boolean(user.is_suspended);
+    const suspendedUntil = user.suspended_until ? new Date(user.suspended_until).getTime() : null;
+    const suspensionActive = isSuspended && (!suspendedUntil || suspendedUntil > Date.now());
+    if (suspensionActive) {
+        return { ok: false, status: 403, message: 'Your account is suspended. Please contact support.' };
+    }
+
+    return { ok: true, user };
+}
+
+function buildAuthResponse(user) {
+    const tokenTtl = process.env.JWT_EXPIRES_IN || '7d';
+    const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role || 'student' },
+        process.env.JWT_SECRET,
+        { expiresIn: tokenTtl }
+    );
+
+    return {
+        token,
+        user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            username: user.username,
+            profile_picture: user.profile_picture,
+            date_of_birth: user.date_of_birth,
+            phone_number: user.phone_number,
+            education_qualification: user.education_qualification,
+            profession: user.profession,
+            role: user.role || 'student'
+        }
+    };
 }
 
 // Signup
@@ -63,47 +121,37 @@ router.post('/verify', async (req, res) => {
 // Login
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
-    const normalizedEmail = normalizeEmail(email);
-    const submittedPassword = String(password || '');
     try {
-        const userResult = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [normalizedEmail]);
-        if (userResult.rows.length === 0) {
-            return res.status(400).json({ message: 'Invalid credentials' });
+        const auth = await authenticateUserByEmailPassword(email, password);
+        if (!auth.ok) {
+            return res.status(auth.status).json({ message: auth.message });
         }
 
-        const user = userResult.rows[0];
-        if (!user.is_verified) {
-            await db.query('UPDATE users SET is_verified = TRUE, verification_code = NULL WHERE id = $1', [user.id]);
-        }
-
-        let isMatch = await bcrypt.compare(submittedPassword, user.password);
-        if (!isMatch && submittedPassword.trim() !== submittedPassword) {
-            isMatch = await bcrypt.compare(submittedPassword.trim(), user.password);
-        }
-        if (!isMatch) {
-            return res.status(400).json({ message: 'Invalid credentials' });
-        }
-
-        const tokenTtl = process.env.JWT_EXPIRES_IN || '7d';
-        const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: tokenTtl });
-        res.json({
-            token,
-            user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                username: user.username,
-                profile_picture: user.profile_picture,
-                date_of_birth: user.date_of_birth,
-                phone_number: user.phone_number,
-                education_qualification: user.education_qualification,
-                profession: user.profession,
-                role: user.role || 'student'
-            }
-        });
+        res.json(buildAuthResponse(auth.user));
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Admin-only login
+router.post('/admin-login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        if (normalizeEmail(email) !== PRIMARY_ADMIN_EMAIL) {
+            return res.status(403).json({ message: 'This account is not allowed to use admin login.' });
+        }
+        const auth = await authenticateUserByEmailPassword(email, password);
+        if (!auth.ok) {
+            return res.status(auth.status).json({ message: auth.message });
+        }
+        if ((auth.user.role || 'student') !== 'admin') {
+            return res.status(403).json({ message: 'Admin access only. Use an admin account.' });
+        }
+        return res.json(buildAuthResponse(auth.user));
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error' });
     }
 });
 

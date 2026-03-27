@@ -77,6 +77,12 @@ export function LoginPage() {
                         Sign up
                     </Link>
                 </div>
+                <div className="text-center text-xs text-muted-foreground">
+                    Admin?{' '}
+                    <Link to="/admin-login" className="text-primary hover:underline font-medium">
+                        Use admin login
+                    </Link>
+                </div>
             </div>
         </div>
     );

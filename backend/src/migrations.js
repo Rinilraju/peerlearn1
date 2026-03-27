@@ -26,6 +26,9 @@ async function runMigrations() {
             );
         `);
         await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'student';`);
+        await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_suspended BOOLEAN NOT NULL DEFAULT FALSE;`);
+        await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_reason TEXT;`);
+        await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_until TIMESTAMP;`);
 
         await db.query(`
             CREATE TABLE IF NOT EXISTS doubts (
@@ -78,6 +81,7 @@ async function runMigrations() {
         await db.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS price DECIMAL(10, 2) DEFAULT 0.00;`);
         await db.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS category VARCHAR(255);`);
         await db.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS instructor_id INTEGER REFERENCES users(id);`);
+        await db.query(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS total_sessions INTEGER NOT NULL DEFAULT 1;`);
 
         // 2. Add tags to doubts
         await db.query(`ALTER TABLE doubts ADD COLUMN IF NOT EXISTS tags TEXT[];`);
@@ -144,10 +148,12 @@ async function runMigrations() {
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
                 payment_id INTEGER REFERENCES payments(id) ON DELETE SET NULL,
+                sessions_completed INTEGER NOT NULL DEFAULT 0,
                 enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, course_id)
             );
         `);
+        await db.query(`ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS sessions_completed INTEGER NOT NULL DEFAULT 0;`);
 
         // 7. Scheduled 1:1 sessions between instructor and enrolled student.
         await db.query(`
@@ -269,6 +275,69 @@ async function runMigrations() {
         await db.query(`
             CREATE INDEX IF NOT EXISTS idx_course_reviews_course
             ON course_reviews(course_id, created_at DESC);
+        `);
+
+        // 12. Session attendance evidence for disputes.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS session_attendance_logs (
+                id SERIAL PRIMARY KEY,
+                session_id INTEGER NOT NULL REFERENCES course_sessions(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                left_at TIMESTAMP,
+                connection_source VARCHAR(20) NOT NULL DEFAULT 'webrtc',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_session_attendance_logs_session_user
+            ON session_attendance_logs(session_id, user_id, joined_at DESC);
+        `);
+
+        // 13. User reports/disputes for anti-scam handling.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS dispute_reports (
+                id SERIAL PRIMARY KEY,
+                reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                reported_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+                session_id INTEGER REFERENCES course_sessions(id) ON DELETE SET NULL,
+                category VARCHAR(50) NOT NULL,
+                details TEXT NOT NULL,
+                status VARCHAR(30) NOT NULL DEFAULT 'open',
+                priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+                resolution_notes TEXT,
+                resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                resolved_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_dispute_reports_status_created
+            ON dispute_reports(status, created_at DESC);
+        `);
+
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_dispute_reports_reporter
+            ON dispute_reports(reporter_id, created_at DESC);
+        `);
+
+        // 14. Admin moderation audit trail.
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS moderation_actions (
+                id SERIAL PRIMARY KEY,
+                admin_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                target_course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+                report_id INTEGER REFERENCES dispute_reports(id) ON DELETE SET NULL,
+                action_type VARCHAR(50) NOT NULL,
+                reason TEXT,
+                metadata JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         `);
 
         console.log('Migrations completed successfully.');

@@ -4,7 +4,13 @@ import io, { Socket } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 
 type Course = { id: number; title: string };
-type Student = { id: number; name: string; email: string };
+type Student = {
+    id: number;
+    name: string;
+    email: string;
+    sessions_completed?: number;
+    total_sessions?: number;
+};
 
 type SessionItem = {
     id: number;
@@ -22,6 +28,9 @@ type SessionItem = {
     can_join: boolean;
     join_enabled_for_student: boolean;
     join_enabled_for_instructor: boolean;
+    total_sessions?: number;
+    sessions_completed?: number;
+    sessions_remaining?: number;
 };
 
 type NotificationItem = {
@@ -187,6 +196,20 @@ export function SessionsPage() {
         }
     };
 
+    const markSessionComplete = async (sessionId: number) => {
+        try {
+            const res = await api.post(`/sessions/${sessionId}/end`);
+            if (res.data?.course_completed) {
+                setStatus('Session marked complete. All sessions for this student are now completed.');
+            } else {
+                setStatus(`Session marked complete. ${res.data?.sessions_remaining ?? 0} session(s) remaining.`);
+            }
+            await fetchCoreData();
+        } catch (error: any) {
+            setStatus(error.response?.data?.message || 'Failed to mark session complete.');
+        }
+    };
+
     const deleteSession = async (sessionId: number) => {
         try {
             await api.delete(`/sessions/${sessionId}`);
@@ -219,6 +242,30 @@ export function SessionsPage() {
             setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
         } catch (error) {
             console.error('Failed to mark notification read:', error);
+        }
+    };
+
+    const reportSessionIssue = async (session: SessionItem) => {
+        const categoryInput = window.prompt('Report category (no_show, payment_fraud, abuse, impersonation, off_platform_scam, content_mismatch, other):', 'no_show');
+        if (!categoryInput) return;
+        const detailsInput = window.prompt('Describe the issue in detail (min 10 chars):');
+        if (!detailsInput || detailsInput.trim().length < 10) {
+            setStatus('Report not submitted. Please provide at least 10 characters of details.');
+            return;
+        }
+        const isTutorSelf = Number(user?.id) === Number(session.instructor_id);
+        const reportedUserId = isTutorSelf ? session.student_id : session.instructor_id;
+        try {
+            await api.post('/trust/reports', {
+                reportedUserId,
+                courseId: session.course_id,
+                sessionId: session.id,
+                category: categoryInput,
+                details: detailsInput.trim(),
+            });
+            setStatus('Report submitted. Admin will review it.');
+        } catch (error: any) {
+            setStatus(error.response?.data?.message || 'Failed to submit report.');
         }
     };
 
@@ -260,7 +307,11 @@ export function SessionsPage() {
                         </select>
                         <select className="h-10 px-3 rounded-md border bg-background" value={selectedStudentId ?? ''} onChange={(e) => setSelectedStudentId(parseSelectValue(e.target.value))}>
                             <option value="">Select student</option>
-                            {students.map((student) => <option key={student.id} value={student.id}>{student.name} ({student.email})</option>)}
+                            {students.map((student) => (
+                                <option key={student.id} value={student.id}>
+                                    {student.name} ({student.email}) - {Number(student.sessions_completed || 0)}/{Number(student.total_sessions || 1)} done
+                                </option>
+                            ))}
                         </select>
                         <div className="flex gap-2">
                             <input
@@ -289,10 +340,21 @@ export function SessionsPage() {
                                     {new Date(session.scheduled_at).toLocaleString()} • {session.duration_minutes} mins
                                 </div>
                                 <div className="text-sm">Tutor: {session.instructor_name} • Student: {session.student_name}</div>
+                                <div className="text-sm text-muted-foreground">
+                                    Sessions: {Number(session.sessions_completed || 0)} / {Number(session.total_sessions || 1)} completed ({Number(session.sessions_remaining || 0)} remaining)
+                                </div>
                                 <div className="mt-2 flex gap-3">
                                     {session.can_start && (
                                         <button onClick={() => startLiveClass(session.id)} className="text-sm px-3 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90">
                                             Start Live Class
+                                        </button>
+                                    )}
+                                    {Number(session.instructor_id) === Number(user?.id) && session.status === 'live' && (
+                                        <button
+                                            onClick={() => markSessionComplete(session.id)}
+                                            className="text-sm px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                                        >
+                                            Mark as Complete
                                         </button>
                                     )}
                                     {session.can_join && (
@@ -309,6 +371,12 @@ export function SessionsPage() {
                                             {session.status === 'live' ? 'End & Delete Session' : 'Delete Schedule'}
                                         </button>
                                     )}
+                                    <button
+                                        onClick={() => reportSessionIssue(session)}
+                                        className="text-sm px-3 py-1 rounded border hover:bg-muted/50"
+                                    >
+                                        Report Issue
+                                    </button>
                                 </div>
                             </div>
                         ))}

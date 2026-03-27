@@ -7,6 +7,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 // Public Pages
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
+import { AdminLoginPage } from './pages/AdminLoginPage';
 import { SignupPage } from './pages/SignupPage';
 
 // Private Pages
@@ -38,7 +39,7 @@ const ProfileCheck = () => {
 
 function App() {
     return (
-        <ThemeProvider defaultTheme="dark" storageKey="peerlearn-theme">
+        <ThemeProvider defaultTheme="light" storageKey="peerlearn-theme">
             <AuthProvider>
                 <DoubtProvider>
                     <BrowserRouter>
@@ -46,6 +47,7 @@ function App() {
                             <Route element={<Layout />}>
                                 <Route path="/" element={<LandingPage />} />
                                 <Route path="/login" element={<LoginPage />} />
+                                <Route path="/admin-login" element={<AdminLoginPage />} />
                                 <Route path="/signup" element={<SignupPage />} />
                                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 

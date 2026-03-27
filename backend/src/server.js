@@ -52,6 +52,8 @@ const userRoutes = require('./routes/users');
 const classRequestRoutes = require('./routes/classRequests');
 const tutorRoutes = require('./routes/tutors');
 const reviewRoutes = require('./routes/reviews');
+const trustRoutes = require('./routes/trust');
+const adminRoutes = require('./routes/admin');
 
 app.use('/auth', authRoutes);
 app.use('/doubts', doubtRoutes);
@@ -64,6 +66,8 @@ app.use('/users', userRoutes);
 app.use('/class-requests', classRequestRoutes);
 app.use('/tutors', tutorRoutes);
 app.use('/reviews', reviewRoutes);
+app.use('/trust', trustRoutes);
+app.use('/admin', adminRoutes);
 
 app.get('/', (req, res) => {
     res.send('PeerLearn Backend Running');
@@ -131,7 +135,7 @@ function startSessionReminderWorker() {
     setInterval(runReminderCheck, 60000);
 }
 
-async function canUserJoinLiveRoom(userId, roomId) {
+async function getLiveRoomAccess(userId, roomId) {
     const result = await db.query(
         `SELECT id, instructor_id, student_id, status, scheduled_at, duration_minutes
          FROM course_sessions
@@ -140,22 +144,22 @@ async function canUserJoinLiveRoom(userId, roomId) {
         [roomId]
     );
     if (result.rows.length === 0) {
-        return false;
+        return { allowed: false, reason: 'Session not found' };
     }
 
     const session = result.rows[0];
     if (session.status !== 'live') {
-        return false;
+        return { allowed: false, reason: 'Session is not live' };
     }
 
     const isInstructor = Number(session.instructor_id) === Number(userId);
     const isStudent = Number(session.student_id) === Number(userId);
     if (!isInstructor && !isStudent) {
-        return false;
+        return { allowed: false, reason: 'User is not a participant' };
     }
 
     if (isInstructor) {
-        return true;
+        return { allowed: true, session, participantRole: 'instructor' };
     }
 
     // Student can join only around scheduled time.
@@ -164,7 +168,13 @@ async function canUserJoinLiveRoom(userId, roomId) {
     const startWindow = scheduled;
     const endWindow = scheduled + durationMs + 30 * 60 * 1000;
     const now = Date.now();
-    return now >= startWindow && now <= endWindow;
+    const allowed = now >= startWindow && now <= endWindow;
+    return {
+        allowed,
+        session,
+        participantRole: 'student',
+        reason: allowed ? null : 'Outside allowed join time',
+    };
 }
 
 async function canAccessCourseChat(userId, courseId, peerId) {
@@ -207,25 +217,78 @@ io.on('connection', (socket) => {
         return;
     }
 
+    const ensureNotSuspended = async () => {
+        const status = await db.query(
+            'SELECT is_suspended, suspended_until FROM users WHERE id = $1 LIMIT 1',
+            [socket.data.userId]
+        );
+        if (status.rows.length === 0) return false;
+        const row = status.rows[0];
+        const isSuspended = Boolean(row.is_suspended);
+        const suspendedUntil = row.suspended_until ? new Date(row.suspended_until).getTime() : null;
+        if (!isSuspended) return true;
+        if (suspendedUntil && suspendedUntil <= Date.now()) return true;
+        return false;
+    };
+
+    const closeAttendanceLog = async () => {
+        if (!socket.data.attendanceLogId) return;
+        try {
+            await db.query(
+                `UPDATE session_attendance_logs
+                 SET left_at = CURRENT_TIMESTAMP
+                 WHERE id = $1 AND left_at IS NULL`,
+                [socket.data.attendanceLogId]
+            );
+        } catch (error) {
+            console.error('Failed to close attendance log:', error.message);
+        } finally {
+            socket.data.attendanceLogId = null;
+            socket.data.sessionId = null;
+            socket.data.roomId = null;
+        }
+    };
+
     socket.on('join-room', async (roomId) => {
         const normalizedRoomId = String(roomId || '');
         if (!normalizedRoomId) {
             return;
         }
 
-        const allowed = await canUserJoinLiveRoom(socket.data.userId, normalizedRoomId);
-        if (!allowed) {
+        const canProceed = await ensureNotSuspended();
+        if (!canProceed) {
+            socket.emit('room-access-denied', { message: 'Your account is suspended.' });
+            return;
+        }
+
+        const access = await getLiveRoomAccess(socket.data.userId, normalizedRoomId);
+        if (!access.allowed) {
             socket.emit('room-access-denied', { message: 'You are not allowed to join this live room now.' });
             return;
         }
 
+        await closeAttendanceLog();
+
         socket.join(normalizedRoomId);
         socket.data.roomId = normalizedRoomId;
+        socket.data.sessionId = access.session.id;
+
+        const attendance = await db.query(
+            `INSERT INTO session_attendance_logs (session_id, user_id, joined_at, connection_source)
+             VALUES ($1, $2, CURRENT_TIMESTAMP, 'webrtc')
+             RETURNING id`,
+            [access.session.id, socket.data.userId]
+        );
+        socket.data.attendanceLogId = attendance.rows[0]?.id || null;
 
         const clientsInRoom = io.sockets.adapter.rooms.get(normalizedRoomId) || new Set();
         const otherSocketIds = Array.from(clientsInRoom).filter((id) => id !== socket.id);
         socket.emit('room-users', otherSocketIds);
         socket.to(normalizedRoomId).emit('user-joined-room', socket.id);
+    });
+
+    socket.on('leave-room', async () => {
+        await closeAttendanceLog();
     });
 
     socket.on('sending-signal', ({ userToSignal, signal }) => {
@@ -280,6 +343,7 @@ io.on('connection', (socket) => {
         if (roomId) {
             socket.to(roomId).emit('user-left', socket.id);
         }
+        closeAttendanceLog();
         console.log('Client disconnected', socket.id);
     });
 });

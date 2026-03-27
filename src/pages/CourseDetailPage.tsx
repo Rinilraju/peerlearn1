@@ -10,6 +10,15 @@ type CourseDetail = {
     price: number | string;
     thumbnail?: string;
     instructor_name?: string;
+    total_sessions?: number;
+};
+
+type EnrollmentSummary = {
+    enrolled: boolean;
+    sessions_completed: number;
+    total_sessions: number;
+    sessions_remaining: number;
+    course_completed: boolean;
 };
 
 export function CourseDetailPage() {
@@ -18,6 +27,7 @@ export function CourseDetailPage() {
     const [course, setCourse] = useState<CourseDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [isEnrolled, setIsEnrolled] = useState(false);
+    const [enrollmentSummary, setEnrollmentSummary] = useState<EnrollmentSummary | null>(null);
     const [isPaying, setIsPaying] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [courseReviews, setCourseReviews] = useState<any[]>([]);
@@ -54,6 +64,7 @@ export function CourseDetailPage() {
                     ]);
                     if (active) {
                         setIsEnrolled(Boolean(enrollmentRes.data?.enrolled));
+                        setEnrollmentSummary(enrollmentRes.data || null);
                     }
                 }
             } catch (error) {
@@ -189,6 +200,9 @@ export function CourseDetailPage() {
                                 <span className="font-medium text-foreground">Created by</span>
                                 <span>{course.instructor_name || 'PeerLearn Instructor'}</span>
                             </div>
+                            <div className="flex items-center space-x-1">
+                                <span>{Number(course.total_sessions || 1)} total sessions</span>
+                            </div>
                         </div>
                     </div>
 
@@ -283,6 +297,15 @@ export function CourseDetailPage() {
 
                         {statusMessage && (
                             <p className="text-sm text-muted-foreground">{statusMessage}</p>
+                        )}
+                        {isEnrolled && enrollmentSummary && (
+                            <div className="p-3 rounded-md border bg-secondary/20 text-sm space-y-1">
+                                <div>Completed: {enrollmentSummary.sessions_completed} / {enrollmentSummary.total_sessions}</div>
+                                <div>Remaining: {enrollmentSummary.sessions_remaining}</div>
+                                {enrollmentSummary.course_completed && (
+                                    <div className="font-medium text-green-700">Course sessions complete</div>
+                                )}
+                            </div>
                         )}
 
                         <div className="space-y-4 text-sm">

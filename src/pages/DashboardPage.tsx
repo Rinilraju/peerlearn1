@@ -41,6 +41,8 @@ export function DashboardPage() {
 
     const mapCourse = (course: any) => ({
         ...course,
+        title: (String(course.title || '').trim() || 'Untitled Course'),
+        description: (String(course.description || '').trim() || 'Description will be updated soon.'),
         image: course.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=60',
         price: parseFloat(course.price) || 0,
         rating: 4.5,

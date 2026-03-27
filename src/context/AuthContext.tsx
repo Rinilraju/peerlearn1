@@ -18,6 +18,7 @@ interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     login: (email: string, password: string) => Promise<void>;
+    adminLogin: (email: string, password: string) => Promise<void>;
     signup: (name: string, email: string, password: string) => Promise<void>;
     verify: (email: string, code: string) => Promise<void>;
     logout: () => void;
@@ -58,6 +59,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUser(userData);
         } catch (error) {
             console.error('Login error:', error);
+            throw error;
+        }
+    };
+
+    const adminLogin = async (email: string, password: string) => {
+        try {
+            const response = await api.post('/auth/admin-login', { email, password });
+            const { token, user } = response.data;
+            const userData: User = { ...user, role: user.role || 'student' };
+            if (userData.role !== 'admin') {
+                throw new Error('Admin access denied');
+            }
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify(userData));
+            setUser(userData);
+        } catch (error) {
+            console.error('Admin login error:', error);
             throw error;
         }
     };
@@ -110,7 +128,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, signup, verify, logout, updateUser, forgotPassword, resetPassword }}>
+        <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, adminLogin, signup, verify, logout, updateUser, forgotPassword, resetPassword }}>
             {!loading && children}
         </AuthContext.Provider>
     );

@@ -4,12 +4,12 @@ const db = require('../db');
 
 const router = express.Router();
 
-async function isStudentEnrolled(studentId, courseId) {
+async function getEnrollment(studentId, courseId) {
     const enrolled = await db.query(
-        'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
+        'SELECT id, sessions_completed FROM enrollments WHERE user_id = $1 AND course_id = $2',
         [studentId, courseId]
     );
-    return enrolled.rows.length > 0;
+    return enrolled.rows[0] || null;
 }
 
 function getWindowBounds(session) {
@@ -33,6 +33,9 @@ function attachSessionAccessFlags(session, userId) {
 
     return {
         ...session,
+        total_sessions: Number(session.total_sessions || 1),
+        sessions_completed: Number(session.sessions_completed || 0),
+        sessions_remaining: Math.max(0, Number(session.total_sessions || 1) - Number(session.sessions_completed || 0)),
         can_start: canStart,
         can_join: canJoinAsInstructor || canJoinAsStudent,
         join_enabled_for_student: canJoinAsStudent,
@@ -51,9 +54,10 @@ router.get('/course/:courseId/students', authenticateToken, async (req, res) => 
         }
 
         const result = await db.query(
-            `SELECT u.id, u.name, u.email, e.enrolled_at
+            `SELECT u.id, u.name, u.email, e.enrolled_at, e.sessions_completed, c.total_sessions
              FROM enrollments e
              INNER JOIN users u ON u.id = e.user_id
+             INNER JOIN courses c ON c.id = e.course_id
              WHERE e.course_id = $1
              ORDER BY e.enrolled_at DESC`,
             [courseId]
@@ -82,14 +86,19 @@ router.post('/', authenticateToken, async (req, res) => {
             return res.status(400).json({ message: 'Scheduled time must be in the future.' });
         }
 
-        const owner = await db.query('SELECT id, title FROM courses WHERE id = $1 AND instructor_id = $2', [courseId, instructorId]);
+        const owner = await db.query('SELECT id, title, total_sessions FROM courses WHERE id = $1 AND instructor_id = $2', [courseId, instructorId]);
         if (owner.rows.length === 0) {
             return res.status(403).json({ message: 'Only course instructor can schedule sessions.' });
         }
+        const totalSessions = Number(owner.rows[0].total_sessions || 1);
 
-        const enrolled = await isStudentEnrolled(studentId, courseId);
-        if (!enrolled) {
+        const enrollment = await getEnrollment(studentId, courseId);
+        if (!enrollment) {
             return res.status(400).json({ message: 'Student is not enrolled in this course.' });
+        }
+        const completedSessions = Number(enrollment.sessions_completed || 0);
+        if (completedSessions >= totalSessions) {
+            return res.status(400).json({ message: 'All sessions are already completed for this student in this course.' });
         }
 
         const requestedDuration = Number(durationMinutes || 60);
@@ -148,9 +157,15 @@ router.get('/mine', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     try {
         const result = await db.query(
-            `SELECT s.*, c.title AS course_title, i.name AS instructor_name, st.name AS student_name
+            `SELECT s.*,
+                    c.title AS course_title,
+                    c.total_sessions,
+                    e.sessions_completed,
+                    i.name AS instructor_name,
+                    st.name AS student_name
              FROM course_sessions s
              INNER JOIN courses c ON c.id = s.course_id
+             INNER JOIN enrollments e ON e.course_id = s.course_id AND e.user_id = s.student_id
              INNER JOIN users i ON i.id = s.instructor_id
              INNER JOIN users st ON st.id = s.student_id
              WHERE s.instructor_id = $1 OR s.student_id = $1
@@ -225,6 +240,9 @@ router.post('/:id/end', authenticateToken, async (req, res) => {
         if (Number(session.instructor_id) !== Number(userId)) {
             return res.status(403).json({ message: 'Only tutor can end this session.' });
         }
+        if (session.status === 'completed') {
+            return res.status(400).json({ message: 'Session is already marked as completed.' });
+        }
 
         await db.query(
             `UPDATE course_sessions
@@ -233,7 +251,46 @@ router.post('/:id/end', authenticateToken, async (req, res) => {
             [id]
         );
 
-        return res.json({ ok: true });
+        const progress = await db.query(
+            `UPDATE enrollments e
+             SET sessions_completed = LEAST(
+                e.sessions_completed + 1,
+                COALESCE((SELECT c.total_sessions FROM courses c WHERE c.id = e.course_id), 1)
+             )
+             WHERE e.course_id = $1 AND e.user_id = $2
+             RETURNING e.sessions_completed`,
+            [session.course_id, session.student_id]
+        );
+
+        const courseMeta = await db.query('SELECT total_sessions FROM courses WHERE id = $1', [session.course_id]);
+        const totalSessions = Number(courseMeta.rows[0]?.total_sessions || 1);
+        const completed = Number(progress.rows[0]?.sessions_completed || 0);
+        const remaining = Math.max(0, totalSessions - completed);
+        const courseCompleted = remaining === 0;
+
+        await db.query(
+            `INSERT INTO notifications (user_id, title, body, type, related_session_id)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [
+                session.student_id,
+                courseCompleted ? 'Course Sessions Completed' : 'Session Completed',
+                courseCompleted
+                    ? 'All scheduled sessions for this course are completed.'
+                    : `Session marked complete. ${remaining} session(s) remaining.`,
+                courseCompleted ? 'course_completed' : 'session_completed',
+                id,
+            ]
+        );
+        const io = req.app.get('io');
+        io?.to(`user:${session.student_id}`).emit('notification', {
+            title: courseCompleted ? 'Course Sessions Completed' : 'Session Completed',
+            body: courseCompleted
+                ? 'All scheduled sessions for this course are completed.'
+                : `Session marked complete. ${remaining} session(s) remaining.`,
+            relatedSessionId: Number(id),
+        });
+
+        return res.json({ ok: true, sessions_completed: completed, total_sessions: totalSessions, sessions_remaining: remaining, course_completed: courseCompleted });
     } catch (error) {
         console.error('Failed to end session:', error);
         return res.status(500).json({ message: 'Server error' });
@@ -314,6 +371,56 @@ router.get('/room/:roomId/access', authenticateToken, async (req, res) => {
         });
     } catch (error) {
         console.error('Failed to validate room access:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+router.get('/:id/attendance', authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    const { id } = req.params;
+    try {
+        const sessionResult = await db.query('SELECT id, instructor_id, student_id FROM course_sessions WHERE id = $1 LIMIT 1', [id]);
+        if (sessionResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Session not found.' });
+        }
+        const session = sessionResult.rows[0];
+        const isParticipant = Number(session.instructor_id) === Number(userId) || Number(session.student_id) === Number(userId);
+        const isAdmin = String(req.user.role || '') === 'admin';
+        if (!isParticipant && !isAdmin) {
+            return res.status(403).json({ message: 'Not allowed to access attendance evidence for this session.' });
+        }
+
+        const logsResult = await db.query(
+            `SELECT l.id, l.user_id, u.name AS user_name, l.joined_at, l.left_at,
+                    GREATEST(0, EXTRACT(EPOCH FROM (COALESCE(l.left_at, CURRENT_TIMESTAMP) - l.joined_at)))::INT AS duration_seconds
+             FROM session_attendance_logs l
+             INNER JOIN users u ON u.id = l.user_id
+             WHERE l.session_id = $1
+             ORDER BY l.joined_at ASC`,
+            [id]
+        );
+
+        const summaryByUser = {};
+        for (const row of logsResult.rows) {
+            if (!summaryByUser[row.user_id]) {
+                summaryByUser[row.user_id] = {
+                    user_id: row.user_id,
+                    user_name: row.user_name,
+                    total_duration_seconds: 0,
+                    join_count: 0,
+                };
+            }
+            summaryByUser[row.user_id].total_duration_seconds += Number(row.duration_seconds || 0);
+            summaryByUser[row.user_id].join_count += 1;
+        }
+
+        return res.json({
+            session_id: Number(id),
+            logs: logsResult.rows,
+            summary: Object.values(summaryByUser),
+        });
+    } catch (error) {
+        console.error('Failed to fetch attendance evidence:', error);
         return res.status(500).json({ message: 'Server error' });
     }
 });
