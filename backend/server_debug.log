@@ -189,3 +189,45 @@ Signup attempt for: rohanrony@gmail.com
 2026-02-20T06:13:33.797Z - GET /courses/my-courses
 2026-02-20T06:13:47.116Z - GET /courses/my-courses
 2026-02-20T06:13:47.188Z - GET /courses/my-courses
+2026-03-27T05:05:49.481Z [0d9c7023-5c6c-4baf-b41c-4f9719b7ccd4] - GET /doubts
+2026-03-27T05:05:49.501Z [537f0c3c-c2b3-4650-bf2e-0de5f62ba55e] - GET /doubts
+2026-03-27T05:05:49.565Z [4a95f351-d5af-40c7-87bc-0ff83a881489] - GET /doubts
+2026-03-27T05:05:49.574Z [c9bb4746-29e0-40f2-b9cd-5e71c812dc30] - GET /doubts
+2026-03-27T05:06:08.636Z [f22c04fc-bad8-43ee-93b4-d5ac371f5c19] - GET /doubts
+2026-03-27T05:06:08.643Z [912f5378-b128-441c-ae90-b47eebbbeaf1] - GET /doubts
+2026-03-27T05:06:11.398Z [dd49cd71-3100-4898-b000-02419699fed8] - GET /courses/my-courses
+2026-03-27T05:06:11.419Z [d478db89-6f9e-4836-b0bf-d60d65b1d3bb] - GET /courses/enrolled
+2026-03-27T05:06:11.428Z [7176843d-e48a-4df1-8550-d6c0e080fc2e] - GET /class-requests/incoming
+2026-03-27T05:06:11.436Z [893d3b52-185e-40c7-9a84-36dc4824acd1] - GET /recommendations/courses?limit=4
+2026-03-27T05:06:11.447Z [f90da1af-e6f5-4401-b235-74b684c767e5] - GET /class-requests/outgoing
+2026-03-27T05:06:11.462Z [ee86963b-d6e1-4fac-ba0d-2603aa83c100] - GET /courses/my-courses
+2026-03-27T05:06:11.467Z [181ad7f5-1aa1-4cf5-8f19-c85f9fbf6920] - GET /courses/enrolled
+2026-03-27T05:06:11.473Z [6bf7b052-2999-47b8-89f3-93b927c0902e] - GET /class-requests/incoming
+2026-03-27T05:06:11.480Z [2c8a661c-35a8-42fc-af04-d0f5168f937d] - GET /recommendations/courses?limit=4
+2026-03-27T05:06:11.493Z [a8203e8e-2d53-4d21-bd71-fa613244f756] - GET /class-requests/outgoing
+2026-03-27T05:08:23.136Z [d024e636-18a5-431e-9e88-17dbd1f18ad7] - GET /doubts
+2026-03-27T05:08:23.186Z [7a23e0d3-eef7-4594-824a-272b5a4820de] - GET /doubts
+2026-03-27T05:08:31.736Z [ea7c1e35-2bcf-4ee8-961e-41add58096c5] - GET /courses/my-courses
+2026-03-27T05:08:31.756Z [412b5b1f-ae6d-4541-b09c-7eef9657882a] - GET /courses/enrolled
+2026-03-27T05:08:31.762Z [81be4f84-f620-4a6a-ad82-d862c66a7a51] - GET /recommendations/courses?limit=4
+2026-03-27T05:08:31.766Z [cd488b97-889f-4871-aed2-610b2c3da7a3] - GET /class-requests/outgoing
+2026-03-27T05:08:31.771Z [8becfafa-07ae-4065-a0b3-b74a64d15088] - GET /class-requests/incoming
+2026-03-27T05:08:31.775Z [aaa1012d-4ca1-4e44-8e06-5cfa1271de5a] - GET /courses/my-courses
+2026-03-27T05:08:31.779Z [f74658f3-0441-43da-9393-a1af93f1711f] - GET /courses/enrolled
+2026-03-27T05:08:31.787Z [8ec380d9-017b-46b7-93f9-236036d73d0c] - GET /recommendations/courses?limit=4
+2026-03-27T05:08:31.793Z [9b6cd149-92e7-43dc-bd40-f9983af864a1] - GET /class-requests/outgoing
+2026-03-27T05:08:31.797Z [7a485341-3df9-4535-91af-7d07e9d1be7a] - GET /class-requests/incoming
+2026-03-27T05:09:35.634Z [fff7e9b9-0edb-4a89-b3d5-577a1ac60ee9] - GET /doubts
+2026-03-27T05:09:35.645Z [dd300272-342a-420e-99d6-af41d00e9213] - GET /doubts
+2026-03-27T05:09:58.358Z [fb82e34e-23a5-4ac8-8720-b3871c0a5dbd] - GET /doubts
+2026-03-27T05:09:58.365Z [c9d7d734-5289-4215-a719-4e9d85d56916] - GET /doubts
+2026-03-27T05:11:42.729Z [a872114f-656c-441b-a8aa-45e31b7c799d] - GET /doubts
+2026-03-27T05:11:42.734Z [117c0991-f67c-426b-b2d2-ec0d793b5b07] - GET /doubts
+2026-03-27T05:12:55.370Z [9b25e73f-2f1e-4dd4-8af6-486a5e841007] - GET /doubts
+2026-03-27T05:12:55.395Z [f35e29d4-147a-4f39-a646-92fbf322f0e9] - GET /doubts
+2026-03-27T05:15:27.281Z [a067ccd8-e002-4682-9f7f-555bbf2fdaf7] - GET /doubts
+2026-03-27T05:15:27.290Z [3f0aac46-4a62-4efa-b2aa-0db5901276d0] - GET /doubts
+2026-03-27T05:31:24.297Z [ef4ad55b-8e84-4d94-9ab3-d76dfc45831a] - GET /doubts
+2026-03-27T05:31:24.303Z [7ef403d4-f572-4e8d-b2c1-5f0b5e16ed26] - GET /doubts
+2026-03-27T05:31:52.114Z [d3bda73f-15e3-44c1-a274-bcc95edf6455] - GET /doubts
+2026-03-27T05:31:52.122Z [fcfbe917-1169-4657-84e2-87de24c57db8] - GET /doubts

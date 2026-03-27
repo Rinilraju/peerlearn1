@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { GraduationCap, Github, Twitter, Linkedin } from 'lucide-react';
 
 export function Footer() {
@@ -28,7 +29,7 @@ export function Footer() {
                     <div>
                         <h3 className="font-semibold mb-4">Resources</h3>
                         <ul className="space-y-2 text-sm text-muted-foreground">
-                            <li><a href="#" className="hover:text-primary">Help Center</a></li>
+                            <li><Link to="/help" className="hover:text-primary">Help Center</Link></li>
                             <li><a href="#" className="hover:text-primary">Community Guidelines</a></li>
                             <li><a href="#" className="hover:text-primary">Terms of Service</a></li>
                         </ul>

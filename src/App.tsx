@@ -24,6 +24,7 @@ import { SessionsPage } from './pages/SessionsPage';
 import { UserProfilePage } from './pages/UserProfilePage';
 import { TutorsPage } from './pages/TutorsPage';
 import { TutorDetailPage } from './pages/TutorDetailPage';
+import { HelpSupportPage } from './pages/HelpSupportPage';
 import { DoubtProvider } from './context/DoubtContext';
 
 import { useAuth } from './context/AuthContext';
@@ -56,6 +57,7 @@ function App() {
                                 <Route path="/doubts" element={<DoubtClearingPage />} />
                                 <Route path="/tutors" element={<TutorsPage />} />
                                 <Route path="/tutors/:id" element={<TutorDetailPage />} />
+                                <Route path="/help" element={<HelpSupportPage />} />
 
                                 {/* Protected Routes */}
                                 <Route element={<ProtectedRoute />}>
