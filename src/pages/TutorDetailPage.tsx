@@ -82,7 +82,7 @@ export function TutorDetailPage() {
                 message: message.trim(),
                 preferredTime: preferredTime || null,
             });
-            setStatus('Class request sent.');
+            setStatus('Class request sent. The tutor has been prompted to open the create course page.');
             setTopic('');
             setMessage('');
             setPreferredTime('');

@@ -48,7 +48,7 @@ export function UserProfilePage() {
                 message: message.trim(),
                 preferredTime: preferredTime || null,
             });
-            setStatus('Class request sent successfully.');
+            setStatus('Class request sent. The tutor has been prompted to open the create course page.');
             setTopic('');
             setMessage('');
             setPreferredTime('');

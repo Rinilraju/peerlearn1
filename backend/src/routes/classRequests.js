@@ -47,7 +47,10 @@ router.post('/', authenticateToken, async (req, res) => {
         const io = req.app.get('io');
         io?.to(`user:${tutorId}`).emit('notification', {
             title: 'New Class Request',
-            body: 'You have received a new class request.',
+            body: 'You have received a new class request. Please create a course to respond.',
+            type: 'class_request',
+            action: 'redirect_create_course',
+            redirectToCreateCourse: true,
             relatedRequestId: result.rows[0].id,
         });
 
