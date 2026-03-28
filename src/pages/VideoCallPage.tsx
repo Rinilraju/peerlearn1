@@ -15,7 +15,9 @@ export function VideoCallPage() {
     const [accessError, setAccessError] = useState('');
     const [callStatus, setCallStatus] = useState('Validating session...');
     const containerRef = useRef<HTMLDivElement>(null);
+    const wrapperRef = useRef<HTMLDivElement>(null);
     const zegoRef = useRef<any>(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
 
     const canUseZego = Number.isFinite(ZEGO_APP_ID) && ZEGO_APP_ID > 0 && ZEGO_SERVER_SECRET.length > 0;
 
@@ -101,10 +103,39 @@ export function VideoCallPage() {
         };
     }, [roomId, user, navigate, canUseZego]);
 
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            const isActive = Boolean(document.fullscreenElement);
+            setIsFullscreen(isActive);
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        };
+    }, []);
+
+    const toggleFullscreen = async () => {
+        try {
+            if (!document.fullscreenElement && wrapperRef.current) {
+                await wrapperRef.current.requestFullscreen();
+            } else if (document.fullscreenElement) {
+                await document.exitFullscreen();
+            }
+        } catch (error) {
+            console.error('Failed to toggle fullscreen:', error);
+        }
+    };
+
     return (
-        <div className="h-[calc(100vh-64px)] flex flex-col bg-slate-950 text-white overflow-hidden">
+        <div ref={wrapperRef} className="h-[calc(100vh-64px)] flex flex-col bg-slate-950 text-white overflow-hidden">
             <div className="h-14 px-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
                 <span className="font-semibold">Live Session: {roomId}</span>
+                <button
+                    onClick={toggleFullscreen}
+                    className="text-xs px-3 py-1 rounded-md border border-slate-700 hover:bg-slate-800"
+                >
+                    {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                </button>
             </div>
 
             <div className="px-4 py-2 text-xs text-slate-300 bg-slate-900/50 border-b border-slate-800">
