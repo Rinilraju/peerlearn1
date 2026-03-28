@@ -149,10 +149,41 @@ router.delete('/courses/:id', authenticateToken, requireAdmin, async (req, res) 
     const { id } = req.params;
     const { reason, reportId } = req.body || {};
     try {
-        const courseResult = await db.query('SELECT id, title FROM courses WHERE id = $1 LIMIT 1', [id]);
+        const courseResult = await db.query('SELECT id, title, total_sessions FROM courses WHERE id = $1 LIMIT 1', [id]);
         if (courseResult.rows.length === 0) {
             return res.status(404).json({ message: 'Course not found.' });
         }
+        const course = courseResult.rows[0];
+        const enrollmentsRes = await db.query(
+            `SELECT id, user_id, payment_id, sessions_completed
+             FROM enrollments
+             WHERE course_id = $1`,
+            [id]
+        );
+        let refundInitiated = 0;
+        const totalSessions = Number(course.total_sessions || 1);
+        for (const enrollment of enrollmentsRes.rows) {
+            const sessionsCompleted = Number(enrollment.sessions_completed || 0);
+            if (enrollment.payment_id && sessionsCompleted < totalSessions) {
+                await db.query(
+                    `UPDATE payments
+                     SET status = 'refunded', updated_at = CURRENT_TIMESTAMP
+                     WHERE id = $1`,
+                    [enrollment.payment_id]
+                );
+                refundInitiated += 1;
+                await db.query(
+                    `INSERT INTO notifications (user_id, title, body, type)
+                     VALUES ($1, $2, $3, 'refund')`,
+                    [
+                        enrollment.user_id,
+                        'Refund initiated',
+                        `Course "${course.title || 'course'}" was removed by admin. A refund was initiated because sessions were incomplete.`,
+                    ]
+                );
+            }
+        }
+        await db.query('DELETE FROM enrollments WHERE course_id = $1', [id]);
         await db.query('DELETE FROM courses WHERE id = $1', [id]);
         await logAction({
             adminId,
@@ -160,11 +191,102 @@ router.delete('/courses/:id', authenticateToken, requireAdmin, async (req, res) 
             reportId: reportId ? Number(reportId) : null,
             actionType: 'delete_course',
             reason: reason || 'Moderation removal',
-            metadata: { courseTitle: courseResult.rows[0].title },
+            metadata: { courseTitle: course.title, refundInitiated },
         });
-        return res.json({ ok: true, deletedCourseId: Number(id) });
+        return res.json({ ok: true, deletedCourseId: Number(id), refundInitiated, unenrolledCount: enrollmentsRes.rows.length });
     } catch (error) {
         console.error('Failed to delete course:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+router.delete('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const adminId = req.user.id;
+    const { id } = req.params;
+    const { reason } = req.body || {};
+    const userId = Number(id);
+    if (Number(adminId) === userId) {
+        return res.status(400).json({ message: 'Admin cannot delete their own account.' });
+    }
+
+    try {
+        const userRes = await db.query('SELECT id, name, email, role FROM users WHERE id = $1', [userId]);
+        if (userRes.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+        const targetUser = userRes.rows[0];
+
+        await db.query('BEGIN');
+
+        const coursesRes = await db.query(
+            'SELECT id, title, total_sessions FROM courses WHERE instructor_id = $1',
+            [userId]
+        );
+        let coursesDeleted = 0;
+        let refundInitiated = 0;
+        for (const course of coursesRes.rows) {
+            const enrollmentsRes = await db.query(
+                `SELECT id, user_id, payment_id, sessions_completed
+                 FROM enrollments
+                 WHERE course_id = $1`,
+                [course.id]
+            );
+            const totalSessions = Number(course.total_sessions || 1);
+            for (const enrollment of enrollmentsRes.rows) {
+                const sessionsCompleted = Number(enrollment.sessions_completed || 0);
+                if (enrollment.payment_id && sessionsCompleted < totalSessions) {
+                    await db.query(
+                        `UPDATE payments
+                         SET status = 'refunded', updated_at = CURRENT_TIMESTAMP
+                         WHERE id = $1`,
+                        [enrollment.payment_id]
+                    );
+                    refundInitiated += 1;
+                    await db.query(
+                        `INSERT INTO notifications (user_id, title, body, type)
+                         VALUES ($1, $2, $3, 'refund')`,
+                        [
+                            enrollment.user_id,
+                            'Refund initiated',
+                            `Course "${course.title || 'course'}" was removed by admin. A refund was initiated because sessions were incomplete.`,
+                        ]
+                    );
+                }
+            }
+            await db.query('DELETE FROM enrollments WHERE course_id = $1', [course.id]);
+            await db.query('DELETE FROM courses WHERE id = $1', [course.id]);
+            coursesDeleted += 1;
+        }
+
+        await db.query('DELETE FROM votes WHERE user_id = $1', [userId]);
+        await db.query('DELETE FROM answers WHERE user_id = $1', [userId]);
+        await db.query('DELETE FROM doubts WHERE user_id = $1', [userId]);
+        await db.query('DELETE FROM users WHERE id = $1', [userId]);
+
+        await db.query('COMMIT');
+
+        await logAction({
+            adminId,
+            targetUserId: userId,
+            actionType: 'delete_user',
+            reason: reason || 'Moderation removal',
+            metadata: {
+                targetEmail: targetUser.email,
+                targetRole: targetUser.role,
+                coursesDeleted,
+                refundInitiated,
+            },
+        });
+
+        return res.json({
+            ok: true,
+            deletedUserId: userId,
+            coursesDeleted,
+            refundInitiated,
+        });
+    } catch (error) {
+        await db.query('ROLLBACK');
+        console.error('Failed to delete user:', error);
         return res.status(500).json({ message: 'Server error' });
     }
 });
