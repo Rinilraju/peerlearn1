@@ -32,6 +32,7 @@ export function DashboardPage() {
     const [myCourses, setMyCourses] = useState<any[]>([]);
     const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
     const [recommendedCourses, setRecommendedCourses] = useState<any[]>([]);
+    const [savedCourses, setSavedCourses] = useState<any[]>([]);
     const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]);
     const [userSearch, setUserSearch] = useState('');
     const [foundUsers, setFoundUsers] = useState<FoundUser[]>([]);
@@ -54,10 +55,11 @@ export function DashboardPage() {
     useEffect(() => {
         const fetchDashboardCourses = async () => {
             try {
-                const [mineRes, enrolledRes, recRes] = await Promise.all([
+                const [mineRes, enrolledRes, recRes, savedRes] = await Promise.all([
                     api.get('/courses/my-courses'),
                     api.get('/courses/enrolled'),
                     api.get('/recommendations/courses?limit=4'),
+                    api.get('/courses/saved'),
                 ]);
                 const sessionsRes = await api.get('/sessions/mine');
                 const now = Date.now();
@@ -68,6 +70,7 @@ export function DashboardPage() {
                 setMyCourses(mineRes.data.map(mapCourse));
                 setEnrolledCourses(enrolledRes.data.map(mapCourse));
                 setRecommendedCourses(recRes.data.map(mapCourse));
+                setSavedCourses(savedRes.data.map(mapCourse));
                 setUpcomingSessions(upcoming);
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
@@ -281,6 +284,20 @@ export function DashboardPage() {
                             <p className="text-sm text-muted-foreground">No recommendations yet. Browse courses to get personalized suggestions.</p>
                         )}
                     </section>
+
+                    {savedCourses.length > 0 && (
+                        <section>
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-2xl font-bold">Saved Courses</h2>
+                                <Link to="/courses" className="text-primary hover:underline text-sm">View All</Link>
+                            </div>
+                            <div className="grid sm:grid-cols-2 gap-4">
+                                {savedCourses.map(course => (
+                                    <CourseCard key={course.id} course={course} />
+                                ))}
+                            </div>
+                        </section>
+                    )}
                 </div>
 
                 <div className="space-y-6">

@@ -131,6 +131,37 @@ export function LandingPage() {
                 </div>
             </section>
 
+            {/* How It Works */}
+            <section className="py-20">
+                <div className="container mx-auto px-4">
+                    <motion.div className="text-center mb-12" {...fadeInUp}>
+                        <h2 className="text-3xl font-bold mb-3">How It Works</h2>
+                        <p className="text-muted-foreground max-w-2xl mx-auto">
+                            A simple flow designed for fast learning and smooth live sessions.
+                        </p>
+                    </motion.div>
+                    <motion.div
+                        className="grid md:grid-cols-3 gap-6"
+                        variants={container}
+                        initial="hidden"
+                        whileInView="show"
+                        viewport={{ once: true }}
+                    >
+                        {[
+                            { step: '01', title: 'Discover', body: 'Browse peer-led courses that match your interests.' },
+                            { step: '02', title: 'Enroll & Schedule', body: 'Join the course and book 1:1 sessions with the tutor.' },
+                            { step: '03', title: 'Go Live', body: 'Meet your tutor in a live session and track your progress.' },
+                        ].map((card) => (
+                            <motion.div key={card.step} variants={item} className="p-6 rounded-xl border bg-card shadow-sm hover:shadow-md transition-shadow">
+                                <div className="text-xs uppercase tracking-widest text-primary">{card.step}</div>
+                                <div className="text-xl font-semibold mt-2">{card.title}</div>
+                                <p className="text-muted-foreground mt-2">{card.body}</p>
+                            </motion.div>
+                        ))}
+                    </motion.div>
+                </div>
+            </section>
+
             {/* Recent Doubts Section */}
             <DoubtPreviewSection />
         </div>

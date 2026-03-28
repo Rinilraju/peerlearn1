@@ -1,4 +1,4 @@
-import { Star, Users, Clock } from 'lucide-react';
+import { Star, Users, CheckCircle } from 'lucide-react';
 import { Course } from '../data/mockData';
 import { Link } from 'react-router-dom';
 
@@ -25,9 +25,23 @@ export function CourseCard({ course }: CourseCardProps) {
                         <span className="font-bold text-primary">${course.price}</span>
                     </div>
 
+                    <div className="flex items-center gap-2 text-xs">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle className="h-3 w-3" />
+                            Verified Tutor
+                        </span>
+                    </div>
+
                     <p className="text-sm text-muted-foreground line-clamp-2">
                         {course.description}
                     </p>
+
+                    {(course as any).top_review_comment && (
+                        <div className="text-xs text-muted-foreground line-clamp-2 border-l-2 border-primary/40 pl-2">
+                            “{(course as any).top_review_comment}”
+                            {(course as any).top_review_reviewer ? ` — ${(course as any).top_review_reviewer}` : ''}
+                        </div>
+                    )}
 
                     {(course as any).recommendation_reason && (
                         <div className="text-[11px] rounded-md border bg-primary/5 text-primary px-2 py-1">

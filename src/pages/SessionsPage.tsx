@@ -279,6 +279,26 @@ export function SessionsPage() {
         }
     };
 
+    const submitQuickFeedback = async (session: SessionItem) => {
+        const ratingInput = window.prompt('Rate this session (1-5):', '5');
+        if (!ratingInput) return;
+        const rating = Number(ratingInput);
+        if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+            setStatus('Please enter a rating between 1 and 5.');
+            return;
+        }
+        const comment = window.prompt('Optional: leave a short feedback note (press OK to skip):', '') || '';
+        try {
+            await api.post(`/reviews/courses/${session.course_id}`, {
+                rating,
+                comment: comment.trim(),
+            });
+            setStatus('Thanks! Your feedback was submitted.');
+        } catch (error: any) {
+            setStatus(error.response?.data?.message || 'Failed to submit feedback.');
+        }
+    };
+
     const sendMessage = async () => {
         if (!chatCourseId || !selectedPeerId || !newMessage.trim()) return;
         try {
@@ -413,6 +433,14 @@ export function SessionsPage() {
                                     )}
                                     {!session.can_join && (
                                         <span className="text-xs text-muted-foreground">Waiting for live window/tutor start</span>
+                                    )}
+                                    {session.status === 'completed' && (
+                                        <button
+                                            onClick={() => submitQuickFeedback(session)}
+                                            className="text-sm px-3 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                                        >
+                                            Rate Session
+                                        </button>
                                     )}
                                     <button
                                         onClick={() => reportSessionIssue(session)}

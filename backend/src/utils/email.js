@@ -36,4 +36,28 @@ const sendVerificationEmail = async (email, code) => {
     }
 };
 
-module.exports = { sendVerificationEmail };
+const sendSessionReminderEmail = async ({ email, courseTitle, scheduledAt }) => {
+    const safeTitle = courseTitle || 'your course';
+    const safeTime = scheduledAt ? new Date(scheduledAt).toLocaleString() : 'soon';
+
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'PeerLearn - Session Reminder',
+        text: `Reminder: Your live session for ${safeTitle} starts at ${safeTime}.`,
+        html: `<p>Reminder: Your live session for <b>${safeTitle}</b> starts at <b>${safeTime}</b>.</p>`,
+    };
+
+    try {
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            console.log('Email credentials missing. Skipping reminder email (Mock Mode).');
+            return;
+        }
+        await transporter.sendMail(mailOptions);
+        console.log(`Session reminder email sent to ${email}`);
+    } catch (error) {
+        console.error('Error sending reminder email (ignoring for dev flow):', error.message);
+    }
+};
+
+module.exports = { sendVerificationEmail, sendSessionReminderEmail };

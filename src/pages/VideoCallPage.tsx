@@ -65,7 +65,10 @@ export function VideoCallPage() {
                     scenario: {
                         mode: ZegoUIKitPrebuilt.OneONoneCall,
                     },
-                    showPreJoinView: false,
+                    showPreJoinView: true,
+                    preJoinViewConfig: {
+                        title: 'Ready to join the live session?',
+                    },
                     autoHideFooter: true,
                     showMyCameraToggleButton: true,
                     showMyMicrophoneToggleButton: true,

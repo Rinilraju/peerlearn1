@@ -267,6 +267,17 @@ async function runMigrations() {
             );
         `);
 
+        // 11.5 Saved courses (bookmarks)
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS saved_courses (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, course_id)
+            );
+        `);
+
         await db.query(`
             CREATE INDEX IF NOT EXISTS idx_tutor_reviews_tutor
             ON tutor_reviews(tutor_id, created_at DESC);

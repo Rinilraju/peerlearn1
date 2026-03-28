@@ -14,6 +14,8 @@ interface Course {
     reviews?: number;
     enrolled?: number;
     instructor?: string;
+    top_review_comment?: string;
+    top_review_reviewer?: string;
     // Map backend fields to frontend expected fields
     image?: string;
     avg_rating?: number;

@@ -43,6 +43,7 @@ export function CourseDetailPage() {
     const [courseReviewCount, setCourseReviewCount] = useState(0);
     const [reviewRating, setReviewRating] = useState('5');
     const [reviewComment, setReviewComment] = useState('');
+    const [isSaved, setIsSaved] = useState(false);
 
     useEffect(() => {
         if (!id) {
@@ -74,6 +75,14 @@ export function CourseDetailPage() {
                     if (active) {
                         setIsEnrolled(Boolean(enrollmentRes.data?.enrolled));
                         setEnrollmentSummary(enrollmentRes.data || null);
+                    }
+                    try {
+                        const savedRes = await api.get(`/courses/${id}/save-status`);
+                        if (active) {
+                            setIsSaved(Boolean(savedRes.data?.saved));
+                        }
+                    } catch (error) {
+                        // Ignore save status failures
                     }
                 }
             } catch (error) {
@@ -165,6 +174,21 @@ export function CourseDetailPage() {
             setStatusMessage('Review submitted.');
         } catch (error: any) {
             setStatusMessage(error?.response?.data?.message || 'Failed to submit review.');
+        }
+    };
+
+    const toggleSaveCourse = async () => {
+        if (!id) return;
+        try {
+            if (isSaved) {
+                await api.delete(`/courses/${id}/save`);
+                setIsSaved(false);
+            } else {
+                await api.post(`/courses/${id}/save`);
+                setIsSaved(true);
+            }
+        } catch (error) {
+            setStatusMessage('Unable to update saved courses right now.');
         }
     };
 
@@ -268,6 +292,10 @@ export function CourseDetailPage() {
                                 <span className="font-medium text-foreground">Created by</span>
                                 <span>{course.instructor_name || 'PeerLearn Instructor'}</span>
                             </div>
+                            <div className="flex items-center space-x-1 text-emerald-600">
+                                <CheckCircle className="h-4 w-4" />
+                                <span className="text-xs font-medium">Verified Tutor</span>
+                            </div>
                             <div className="flex items-center space-x-1">
                                 <span>{Number(course.total_sessions || 1)} total sessions</span>
                             </div>
@@ -289,6 +317,18 @@ export function CourseDetailPage() {
                                 <div key={`${item}-${index}`} className="flex items-start space-x-2">
                                     <CheckCircle className="h-5 w-5 text-primary shrink-0" />
                                     <span className="text-sm">{item}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h2 className="text-2xl font-bold">Course Syllabus</h2>
+                        <div className="grid sm:grid-cols-2 gap-3">
+                            {displayLearnItems.slice(0, 6).map((item, index) => (
+                                <div key={`syllabus-${index}`} className="p-3 rounded-md border bg-card text-sm">
+                                    <div className="text-xs text-muted-foreground">Module {index + 1}</div>
+                                    <div className="font-medium">{item}</div>
                                 </div>
                             ))}
                         </div>
@@ -340,8 +380,12 @@ export function CourseDetailPage() {
                                 <button className="p-2 rounded-full hover:bg-muted transition-colors">
                                     <Share2 className="h-5 w-5 text-muted-foreground" />
                                 </button>
-                                <button className="p-2 rounded-full hover:bg-muted transition-colors">
-                                    <Heart className="h-5 w-5 text-muted-foreground" />
+                                <button
+                                    onClick={toggleSaveCourse}
+                                    className="p-2 rounded-full hover:bg-muted transition-colors"
+                                    title={isSaved ? 'Remove from saved' : 'Save course'}
+                                >
+                                    <Heart className={`h-5 w-5 ${isSaved ? 'text-rose-500 fill-rose-500' : 'text-muted-foreground'}`} />
                                 </button>
                             </div>
                         </div>

@@ -422,7 +422,10 @@ router.get('/', async (req, res) => {
                    u.name AS instructor_name,
                    COALESCE(cr.avg_rating, 0) AS avg_rating,
                    COALESCE(cr.review_count, 0) AS review_count,
-                   COALESCE(e.enroll_count, 0) AS enroll_count
+                   COALESCE(e.enroll_count, 0) AS enroll_count,
+                   tr.top_review_comment,
+                   tr.top_review_rating,
+                   tr.top_review_reviewer
             FROM courses c
             LEFT JOIN users u ON c.instructor_id = u.id
             LEFT JOIN (
@@ -437,6 +440,18 @@ router.get('/', async (req, res) => {
                 FROM enrollments
                 GROUP BY course_id
             ) e ON e.course_id = c.id
+            LEFT JOIN LATERAL (
+                SELECT cr.rating AS top_review_rating,
+                       cr.comment AS top_review_comment,
+                       u2.name AS top_review_reviewer
+                FROM course_reviews cr
+                LEFT JOIN users u2 ON u2.id = cr.reviewer_id
+                WHERE cr.course_id = c.id
+                  AND cr.comment IS NOT NULL
+                  AND LENGTH(TRIM(cr.comment)) > 0
+                ORDER BY cr.created_at DESC
+                LIMIT 1
+            ) tr ON TRUE
             ORDER BY c.created_at DESC
         `);
         res.json(result.rows);
@@ -454,6 +469,69 @@ router.get('/my-courses', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Get courses saved by current user
+router.get('/saved', authenticateToken, async (req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT c.*, u.name AS instructor_name
+             FROM saved_courses sc
+             INNER JOIN courses c ON c.id = sc.course_id
+             LEFT JOIN users u ON u.id = c.instructor_id
+             WHERE sc.user_id = $1
+             ORDER BY sc.created_at DESC`,
+            [req.user.id]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Failed to fetch saved courses:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Check if current user saved a course
+router.get('/:id/save-status', authenticateToken, async (req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT id FROM saved_courses WHERE user_id = $1 AND course_id = $2 LIMIT 1`,
+            [req.user.id, req.params.id]
+        );
+        return res.json({ saved: result.rows.length > 0 });
+    } catch (error) {
+        console.error('Failed to fetch saved status:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Save a course
+router.post('/:id/save', authenticateToken, async (req, res) => {
+    try {
+        await db.query(
+            `INSERT INTO saved_courses (user_id, course_id)
+             VALUES ($1, $2)
+             ON CONFLICT (user_id, course_id) DO NOTHING`,
+            [req.user.id, req.params.id]
+        );
+        return res.json({ ok: true, saved: true });
+    } catch (error) {
+        console.error('Failed to save course:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Unsave a course
+router.delete('/:id/save', authenticateToken, async (req, res) => {
+    try {
+        await db.query(
+            `DELETE FROM saved_courses WHERE user_id = $1 AND course_id = $2`,
+            [req.user.id, req.params.id]
+        );
+        return res.json({ ok: true, saved: false });
+    } catch (error) {
+        console.error('Failed to remove saved course:', error);
+        return res.status(500).json({ message: 'Server error' });
     }
 });
 

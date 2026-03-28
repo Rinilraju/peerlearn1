@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const jwt = require('jsonwebtoken');
 const { randomUUID } = require('crypto');
 const path = require('path');
+const { sendSessionReminderEmail } = require('./utils/email');
 
 dotenv.config();
 
@@ -102,12 +103,16 @@ function startSessionReminderWorker() {
     const runReminderCheck = async () => {
         try {
             const result = await db.query(
-                `SELECT id, student_id, scheduled_at
-                 FROM course_sessions
-                 WHERE status = 'scheduled'
-                   AND reminder_sent_10m = FALSE
-                   AND scheduled_at > NOW()
-                   AND scheduled_at <= NOW() + INTERVAL '10 minutes'`
+                `SELECT s.id, s.student_id, s.scheduled_at,
+                        u.email AS student_email,
+                        c.title AS course_title
+                 FROM course_sessions s
+                 INNER JOIN users u ON u.id = s.student_id
+                 INNER JOIN courses c ON c.id = s.course_id
+                 WHERE s.status = 'scheduled'
+                   AND s.reminder_sent_10m = FALSE
+                   AND s.scheduled_at > NOW()
+                   AND s.scheduled_at <= NOW() + INTERVAL '10 minutes'`
             );
 
             for (const session of result.rows) {
@@ -127,6 +132,14 @@ function startSessionReminderWorker() {
                     body: 'Your live session starts in less than 10 minutes.',
                     relatedSessionId: session.id,
                 });
+
+                if (session.student_email) {
+                    await sendSessionReminderEmail({
+                        email: session.student_email,
+                        courseTitle: session.course_title,
+                        scheduledAt: session.scheduled_at,
+                    });
+                }
             }
         } catch (error) {
             console.error('Session reminder worker failed:', error.message);

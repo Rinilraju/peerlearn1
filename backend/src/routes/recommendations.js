@@ -144,7 +144,10 @@ router.get('/courses', authenticateToken, async (req, res) => {
                         u.name AS instructor_name,
                         COALESCE(cr.avg_rating, 0) AS avg_rating,
                         COALESCE(cr.review_count, 0) AS review_count,
-                        COALESCE(e.enroll_count, 0) AS enroll_count
+                        COALESCE(e.enroll_count, 0) AS enroll_count,
+                        tr.top_review_comment,
+                        tr.top_review_rating,
+                        tr.top_review_reviewer
                  FROM courses c
                  LEFT JOIN users u ON u.id = c.instructor_id
                  LEFT JOIN (
@@ -158,7 +161,19 @@ router.get('/courses', authenticateToken, async (req, res) => {
                     SELECT course_id, COUNT(*)::int AS enroll_count
                     FROM enrollments
                     GROUP BY course_id
-                 ) e ON e.course_id = c.id`
+                 ) e ON e.course_id = c.id
+                 LEFT JOIN LATERAL (
+                    SELECT cr.rating AS top_review_rating,
+                           cr.comment AS top_review_comment,
+                           u2.name AS top_review_reviewer
+                    FROM course_reviews cr
+                    LEFT JOIN users u2 ON u2.id = cr.reviewer_id
+                    WHERE cr.course_id = c.id
+                      AND cr.comment IS NOT NULL
+                      AND LENGTH(TRIM(cr.comment)) > 0
+                    ORDER BY cr.created_at DESC
+                    LIMIT 1
+                 ) tr ON TRUE`
             ),
             db.query(
                 `SELECT ci.course_id, ci.interaction_type, COUNT(*)::int AS score
