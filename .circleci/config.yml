@@ -20,16 +20,16 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install Frontend Dependencies
+          name: Install Core Frontend Dependencies
           command: npm install
       - run:
-          name: Install Vitest and Testing Library
+          name: Dynamically Install Vitest and RTL
           command: npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom @types/jest
       - run:
           name: Run Frontend Unit Tests
-          command: npx vitest run src/tests/ --passWithNoTests
+          command: npx vitest run --passWithNoTests
 
-  # 2. Backend Integration/Unit Testing
+  # 2. Backend Integration/Unit Testing (Jest)
   backend-unit-test:
     docker:
       - image: cimg/node:20.11.1
@@ -46,17 +46,20 @@ jobs:
           name: Wait for PostgreSQL
           command: npx wait-on tcp:5432 -t 60000
       - run:
-          name: Install Backend Dependencies + Jest + Start Server
+          name: Install Backend Dependencies + Jest + Supertest
           command: cd backend && npm install && npm install -D jest supertest && npm start
           background: true
       - run:
-          name: Wait for Backend Health (60s)
-          command: npx wait-on http://127.0.0.1:5000/health -t 60000
+          name: Wait for Backend to start
+          command: npx wait-on tcp:5000 -t 60000
+      - run:
+          name: Wait for migrations to complete
+          command: sleep 10
       - run:
           name: Run Backend Jest Tests
-          command: cd backend && npx jest --testPathPattern="src/tests/health.test.js" --forceExit
+          command: cd backend && npx jest --forceExit
 
-  # 3. Frontend Functional E2E Testing (Playwright)
+  # 3. Frontend End-to-End Testing (Playwright)
   frontend-e2e-test:
     docker:
       - image: cimg/node:20.11.1-browsers
@@ -80,8 +83,11 @@ jobs:
             npm start
           background: true
       - run:
-          name: Wait for Backend (60s)
-          command: npx wait-on http://127.0.0.1:5000/health -t 60000
+          name: Wait for Backend to start
+          command: npx wait-on tcp:5000 -t 60000
+      - run:
+          name: Wait for migrations to complete
+          command: sleep 10
       - run:
           name: Install Frontend Dependencies & Start App
           command: |
@@ -97,10 +103,10 @@ jobs:
             npm install -D @playwright/test
             npx playwright install --with-deps chromium
       - run:
-          name: Run Playwright Functional Tests
-          command: npx playwright test playwright-tests/e2e/home.spec.ts
+          name: Run Playwright E2E Tests
+          command: npx playwright test
 
-  # 4. Load + Pressure Testing (Artillery)
+  # 4. Backend Load + Pressure Testing (Artillery)
   backend-load-test:
     docker:
       - image: cimg/node:20.11.1
@@ -118,14 +124,14 @@ jobs:
           command: npx wait-on tcp:5432 -t 60000
       - run:
           name: Install Backend Dependencies + Artillery
-          command: cd backend && npm install && npm install -D artillery
-      - run:
-          name: Start Backend Server
-          command: cd backend && npm start
+          command: cd backend && npm install && npm install -D artillery && npm start
           background: true
       - run:
-          name: Wait for Backend (60s)
-          command: npx wait-on http://127.0.0.1:5000/health -t 60000
+          name: Wait for Backend to start
+          command: npx wait-on tcp:5000 -t 60000
+      - run:
+          name: Wait for migrations to complete
+          command: sleep 10
       - run:
           name: Run Load & Pressure Tests
           command: cd backend && npx artillery run load-tester.yml
@@ -138,3 +144,4 @@ workflows:
       - backend-unit-test
       - frontend-e2e-test
       - backend-load-test
+
