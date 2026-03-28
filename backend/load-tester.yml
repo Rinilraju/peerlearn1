@@ -1,0 +1,20 @@
+config:
+  target: "http://127.0.0.1:5000"
+  phases:
+    # 1. LOAD TESTING - Tests baseline latency and memory state over 40 seconds
+    - duration: 40
+      arrivalRate: 5
+      name: "Sustained Base Load"
+      
+    # 2. PRESSURE TESTING (Spike) - Purposely pounds the server with traffic quickly
+    # to find scaling/processing breaking points
+    - duration: 20
+      arrivalRate: 20
+      rampTo: 100
+      name: "Heavy Pressure/Stress Spike Phase"
+
+scenarios:
+  - name: "Health Verification Scenario"
+    flow:
+      - get:
+          url: "/health"
