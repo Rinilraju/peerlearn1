@@ -66,6 +66,10 @@ export function VideoCallPage() {
                         mode: ZegoUIKitPrebuilt.OneONoneCall,
                     },
                     showPreJoinView: false,
+                    autoHideFooter: true,
+                    showMyCameraToggleButton: true,
+                    showMyMicrophoneToggleButton: true,
+                    showLeaveRoomConfirmDialog: true,
                     turnOnMicrophoneWhenJoining: true,
                     turnOnCameraWhenJoining: true,
                     onJoinRoom: () => {
@@ -140,6 +144,10 @@ export function VideoCallPage() {
 
             <div className="px-4 py-2 text-xs text-slate-300 bg-slate-900/50 border-b border-slate-800">
                 {callStatus}
+            </div>
+
+            <div className="px-4 py-2 text-[11px] text-slate-400 bg-slate-900/40 border-b border-slate-800">
+                Tip: Click or tap the video to reveal the call controls (mute, camera, leave).
             </div>
 
             {accessError && (

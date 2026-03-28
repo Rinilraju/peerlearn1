@@ -245,6 +245,16 @@ export function SessionsPage() {
         }
     };
 
+    const clearAllNotifications = async () => {
+        try {
+            await api.delete('/sessions/notifications');
+            setNotifications([]);
+        } catch (error) {
+            console.error('Failed to clear notifications:', error);
+            setStatus('Failed to clear notifications.');
+        }
+    };
+
     const reportSessionIssue = async (session: SessionItem) => {
         const categoryInput = window.prompt('Report category (no_show, payment_fraud, abuse, impersonation, off_platform_scam, content_mismatch, other):', 'no_show');
         if (!categoryInput) return;
@@ -327,13 +337,15 @@ export function SessionsPage() {
                 </section>
             )}
 
-            <section className="p-4 border rounded-lg space-y-4">
-                <h2 className="text-xl font-semibold">My Scheduled Sessions</h2>
-                {sessions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No sessions yet.</p>
-                ) : (
-                    <div className="space-y-3">
-                        {sessions.map((session) => (
+            <section className="p-4 border rounded-lg space-y-6">
+                <h2 className="text-xl font-semibold">My Sessions</h2>
+
+                <div className="space-y-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Sessions I Scheduled (Tutor)</h3>
+                    {sessions.filter((s) => Number(s.instructor_id) === Number(user?.id)).length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No sessions scheduled by you yet.</p>
+                    ) : (
+                        sessions.filter((s) => Number(s.instructor_id) === Number(user?.id)).map((session) => (
                             <div key={session.id} className="p-3 rounded border bg-card">
                                 <div className="font-medium">{session.course_title}</div>
                                 <div className="text-sm text-muted-foreground">
@@ -363,7 +375,7 @@ export function SessionsPage() {
                                     {!session.can_start && !session.can_join && (
                                         <span className="text-xs text-muted-foreground">Waiting for live window/tutor start</span>
                                     )}
-                                    {Number(session.instructor_id) === Number(user?.id) && ['scheduled', 'live'].includes(session.status) && (
+                                    {['scheduled', 'live'].includes(session.status) && (
                                         <button
                                             onClick={() => deleteSession(session.id)}
                                             className="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
@@ -379,13 +391,55 @@ export function SessionsPage() {
                                     </button>
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                )}
+                        ))
+                    )}
+                </div>
+
+                <div className="space-y-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Sessions Scheduled For Me (Student)</h3>
+                    {sessions.filter((s) => Number(s.student_id) === Number(user?.id)).length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No sessions scheduled for you yet.</p>
+                    ) : (
+                        sessions.filter((s) => Number(s.student_id) === Number(user?.id)).map((session) => (
+                            <div key={session.id} className="p-3 rounded border bg-card">
+                                <div className="font-medium">{session.course_title}</div>
+                                <div className="text-sm text-muted-foreground">
+                                    {new Date(session.scheduled_at).toLocaleString()} • {session.duration_minutes} mins
+                                </div>
+                                <div className="text-sm">Tutor: {session.instructor_name} • Student: {session.student_name}</div>
+                                <div className="mt-2 flex gap-3">
+                                    {session.can_join && (
+                                        <a href={`/session/${session.meeting_room_id}`} className="inline-block text-primary hover:underline text-sm">Join Now</a>
+                                    )}
+                                    {!session.can_join && (
+                                        <span className="text-xs text-muted-foreground">Waiting for live window/tutor start</span>
+                                    )}
+                                    <button
+                                        onClick={() => reportSessionIssue(session)}
+                                        className="text-sm px-3 py-1 rounded border hover:bg-muted/50"
+                                    >
+                                        Report Issue
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
             </section>
 
             <section className="p-4 border rounded-lg space-y-4">
-                <h2 className="text-xl font-semibold">Notifications</h2>
+                <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold">Notifications</h2>
+                    {notifications.length > 0 && (
+                        <button
+                            onClick={clearAllNotifications}
+                            className="text-sm px-3 py-1 rounded border hover:bg-muted/50"
+                            title="Clear all notifications"
+                        >
+                            *
+                        </button>
+                    )}
+                </div>
                 {notifications.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No notifications yet.</p>
                 ) : (
@@ -430,3 +484,4 @@ export function SessionsPage() {
         </div>
     );
 }
+

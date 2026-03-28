@@ -463,4 +463,15 @@ router.patch('/notifications/:id/read', authenticateToken, async (req, res) => {
     }
 });
 
+router.delete('/notifications', authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+    try {
+        await db.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
+        return res.json({ ok: true });
+    } catch (error) {
+        console.error('Failed to clear notifications:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
 module.exports = router;
