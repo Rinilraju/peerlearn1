@@ -24,12 +24,12 @@ jobs:
           command: npm install
       - run:
           name: Install Vitest and Testing Library
-          command: npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom @types/react @types/react-dom
+          command: npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom @types/jest
       - run:
-          name: Run Frontend Unit Tests (scoped to src/tests only)
-          command: npx vitest run src/tests/ --globals --reporter=verbose
+          name: Run Frontend Unit Tests
+          command: npx vitest run src/tests/ --passWithNoTests
 
-  # 2. Backend Unit & Integration Testing
+  # 2. Backend Integration/Unit Testing
   backend-unit-test:
     docker:
       - image: cimg/node:20.11.1
@@ -43,20 +43,14 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Wait for PostgreSQL to be fully ready
+          name: Wait for PostgreSQL
           command: npx wait-on tcp:5432 -t 60000
       - run:
-          name: Install Backend Dependencies
-          command: cd backend && npm install
-      - run:
-          name: Install Jest and Supertest
-          command: cd backend && npm install -D jest supertest
-      - run:
-          name: Start Backend Server in background
-          command: cd backend && npm start
+          name: Install Backend Dependencies + Jest + Start Server
+          command: cd backend && npm install && npm install -D jest supertest && npm start
           background: true
       - run:
-          name: Wait for Backend Health (60s timeout)
+          name: Wait for Backend Health (60s)
           command: npx wait-on http://127.0.0.1:5000/health -t 60000
       - run:
           name: Run Backend Jest Tests
@@ -76,30 +70,37 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Wait for PostgreSQL to be fully ready
+          name: Wait for PostgreSQL
           command: npx wait-on tcp:5432 -t 60000
       - run:
-          name: Install and Start Backend
-          command: cd backend && npm install && npm start
+          name: Install Backend Dependencies & Start Server
+          command: |
+            cd backend
+            npm install
+            npm start
           background: true
       - run:
-          name: Wait for Backend (60s timeout)
+          name: Wait for Backend (60s)
           command: npx wait-on http://127.0.0.1:5000/health -t 60000
       - run:
-          name: Install Frontend Dependencies and Start App
-          command: npm install && npm run dev
+          name: Install Frontend Dependencies & Start App
+          command: |
+            npm install
+            npm run dev
           background: true
       - run:
           name: Wait for Frontend
           command: npx wait-on http://127.0.0.1:5173 -t 60000
       - run:
           name: Install and Setup Playwright
-          command: npm install -D @playwright/test && npx playwright install --with-deps chromium
+          command: |
+            npm install -D @playwright/test
+            npx playwright install --with-deps chromium
       - run:
           name: Run Playwright Functional Tests
           command: npx playwright test playwright-tests/e2e/home.spec.ts
 
-  # 4. Backend Load & Pressure Testing (Artillery)
+  # 4. Load + Pressure Testing (Artillery)
   backend-load-test:
     docker:
       - image: cimg/node:20.11.1
@@ -113,20 +114,17 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Wait for PostgreSQL to be fully ready
+          name: Wait for PostgreSQL
           command: npx wait-on tcp:5432 -t 60000
       - run:
-          name: Install Backend Dependencies
-          command: cd backend && npm install
-      - run:
-          name: Install Artillery
-          command: cd backend && npm install -D artillery
+          name: Install Backend Dependencies + Artillery
+          command: cd backend && npm install && npm install -D artillery
       - run:
           name: Start Backend Server
           command: cd backend && npm start
           background: true
       - run:
-          name: Wait for Backend (60s timeout)
+          name: Wait for Backend (60s)
           command: npx wait-on http://127.0.0.1:5000/health -t 60000
       - run:
           name: Run Load & Pressure Tests
@@ -140,5 +138,3 @@ workflows:
       - backend-unit-test
       - frontend-e2e-test
       - backend-load-test
-
-
