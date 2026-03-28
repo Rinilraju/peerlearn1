@@ -517,6 +517,108 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// Update course description (tutor/admin only)
+router.patch('/:id', authenticateToken, async (req, res) => {
+    const { description } = req.body || {};
+    const safeDescription = String(description || '').trim();
+    if (safeDescription.length < 12) {
+        return res.status(400).json({ message: 'Course description must be at least 12 characters.' });
+    }
+
+    try {
+        const courseRes = await db.query('SELECT id, instructor_id FROM courses WHERE id = $1', [req.params.id]);
+        if (courseRes.rows.length === 0) {
+            return res.status(404).json({ message: 'Course not found' });
+        }
+        const course = courseRes.rows[0];
+        const isOwner = Number(course.instructor_id) === Number(req.user.id);
+        const isAdmin = req.user.role === 'admin';
+        if (!isOwner && !isAdmin) {
+            return res.status(403).json({ message: 'Only the course tutor or admin can update this course.' });
+        }
+
+        const result = await db.query(
+            'UPDATE courses SET description = $1 WHERE id = $2 RETURNING *',
+            [safeDescription, req.params.id]
+        );
+        return res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Failed to update course:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Delete course (tutor/admin only) + refund incomplete sessions
+router.delete('/:id', authenticateToken, async (req, res) => {
+    const courseId = Number(req.params.id);
+    let transactionStarted = false;
+    try {
+        const courseRes = await db.query(
+            'SELECT id, instructor_id, total_sessions, title FROM courses WHERE id = $1',
+            [courseId]
+        );
+        if (courseRes.rows.length === 0) {
+            return res.status(404).json({ message: 'Course not found' });
+        }
+        const course = courseRes.rows[0];
+        const isOwner = Number(course.instructor_id) === Number(req.user.id);
+        const isAdmin = req.user.role === 'admin';
+        if (!isOwner && !isAdmin) {
+            return res.status(403).json({ message: 'Only the course tutor or admin can delete this course.' });
+        }
+
+        await db.query('BEGIN');
+        transactionStarted = true;
+
+        const enrollmentsRes = await db.query(
+            `SELECT id, user_id, payment_id, sessions_completed
+             FROM enrollments
+             WHERE course_id = $1`,
+            [courseId]
+        );
+
+        let refundInitiated = 0;
+        const totalSessions = Number(course.total_sessions || 1);
+        for (const enrollment of enrollmentsRes.rows) {
+            const sessionsCompleted = Number(enrollment.sessions_completed || 0);
+            if (enrollment.payment_id && sessionsCompleted < totalSessions) {
+                await db.query(
+                    `UPDATE payments
+                     SET status = 'refunded', updated_at = CURRENT_TIMESTAMP
+                     WHERE id = $1`,
+                    [enrollment.payment_id]
+                );
+                refundInitiated += 1;
+                await db.query(
+                    `INSERT INTO notifications (user_id, title, body, type)
+                     VALUES ($1, $2, $3, 'refund')`,
+                    [
+                        enrollment.user_id,
+                        'Refund initiated',
+                        `Course "${course.title || 'course'}" was deleted by the tutor. A refund was initiated because sessions were incomplete.`,
+                    ]
+                );
+            }
+        }
+
+        await db.query('DELETE FROM enrollments WHERE course_id = $1', [courseId]);
+        await db.query('DELETE FROM courses WHERE id = $1', [courseId]);
+
+        await db.query('COMMIT');
+        return res.json({
+            deleted: true,
+            unenrolledCount: enrollmentsRes.rows.length,
+            refundInitiated,
+        });
+    } catch (error) {
+        if (transactionStarted) {
+            await db.query('ROLLBACK');
+        }
+        console.error('Failed to delete course:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // Create a new course
 router.post('/', authenticateToken, async (req, res) => {
     const { title, description, price, category, video_url, thumbnail, total_sessions } = req.body;

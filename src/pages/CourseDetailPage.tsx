@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { Star, Users, CheckCircle, Share2, Heart } from 'lucide-react';
 import api from '../api';
+import { useAuth } from '../context/AuthContext';
 
 type CourseDetail = {
     id: string;
@@ -10,6 +11,7 @@ type CourseDetail = {
     price: number | string;
     thumbnail?: string;
     instructor_name?: string;
+    instructor_id?: number | string;
     total_sessions?: number;
 };
 
@@ -23,12 +25,18 @@ type EnrollmentSummary = {
 
 export function CourseDetailPage() {
     const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
+    const { user } = useAuth();
     const [searchParams] = useSearchParams();
     const [course, setCourse] = useState<CourseDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [isEnrolled, setIsEnrolled] = useState(false);
     const [enrollmentSummary, setEnrollmentSummary] = useState<EnrollmentSummary | null>(null);
     const [isPaying, setIsPaying] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editDescription, setEditDescription] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const [courseReviews, setCourseReviews] = useState<any[]>([]);
     const [courseAvgRating, setCourseAvgRating] = useState(0);
@@ -49,6 +57,7 @@ export function CourseDetailPage() {
                     return;
                 }
                 setCourse(courseRes.data);
+                setEditDescription(String(courseRes.data?.description || ''));
                 const reviewsRes = await api.get(`/reviews/courses/${id}`);
                 if (active) {
                     setCourseReviews(reviewsRes.data?.items || []);
@@ -159,6 +168,52 @@ export function CourseDetailPage() {
         }
     };
 
+    const saveDescription = async () => {
+        if (!id || !course) {
+            return;
+        }
+        const nextDescription = String(editDescription || '').trim();
+        if (nextDescription.length < 12) {
+            setStatusMessage('Description must be at least 12 characters.');
+            return;
+        }
+        setIsSaving(true);
+        setStatusMessage('');
+        try {
+            const res = await api.patch(`/courses/${id}`, { description: nextDescription });
+            setCourse((prev) => (prev ? { ...prev, description: res.data?.description || nextDescription } : prev));
+            setIsEditing(false);
+            setStatusMessage('Description updated.');
+        } catch (error: any) {
+            setStatusMessage(error?.response?.data?.message || 'Failed to update description.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const deleteCourse = async () => {
+        if (!id || !course) {
+            return;
+        }
+        const confirmed = window.confirm('Delete this course? Enrolled students will be unenrolled and refunds will be initiated for incomplete sessions.');
+        if (!confirmed) {
+            return;
+        }
+        setIsDeleting(true);
+        setStatusMessage('');
+        try {
+            const res = await api.delete(`/courses/${id}`);
+            const refunds = Number(res.data?.refundInitiated || 0);
+            const unenrolled = Number(res.data?.unenrolledCount || 0);
+            setStatusMessage(`Course deleted. Unenrolled ${unenrolled} students. Refunds initiated for ${refunds} enrollment(s).`);
+            navigate('/dashboard');
+        } catch (error: any) {
+            setStatusMessage(error?.response?.data?.message || 'Failed to delete course.');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="container mx-auto px-4 py-8 text-center">
@@ -175,8 +230,21 @@ export function CourseDetailPage() {
         );
     }
 
+    const isOwner = course?.instructor_id && Number(course.instructor_id) === Number(user?.id);
+    const isAdmin = user?.role === 'admin';
+    const canManageCourse = Boolean(isOwner || isAdmin);
     const price = parseFloat(String(course.price || 0)) || 0;
     const image = course.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200&auto=format&fit=crop&q=60';
+    const learnItems = String(course.description || '')
+        .split(/\n|•|-/)
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    let displayLearnItems = learnItems.length > 0
+        ? learnItems
+        : [String(course.description || '').trim()].filter(Boolean);
+    if (displayLearnItems.length === 0) {
+        displayLearnItems = ['Course outcomes will be updated soon.'];
+    }
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -217,10 +285,10 @@ export function CourseDetailPage() {
                     <div className="space-y-4">
                         <h2 className="text-2xl font-bold">What you'll learn</h2>
                         <div className="grid sm:grid-cols-2 gap-4">
-                            {[1, 2, 3, 4, 5, 6].map((i) => (
-                                <div key={i} className="flex items-start space-x-2">
+                            {displayLearnItems.map((item, index) => (
+                                <div key={`${item}-${index}`} className="flex items-start space-x-2">
                                     <CheckCircle className="h-5 w-5 text-primary shrink-0" />
-                                    <span className="text-sm">Master practical concepts through guided lessons and projects.</span>
+                                    <span className="text-sm">{item}</span>
                                 </div>
                             ))}
                         </div>
@@ -293,6 +361,53 @@ export function CourseDetailPage() {
                             >
                                 {isPaying ? 'Redirecting to Checkout...' : 'Enroll Now'}
                             </button>
+                        )}
+
+                        {canManageCourse && (
+                            <div className="space-y-3">
+                                <div className="text-sm font-semibold">Tutor Controls</div>
+                                {isEditing ? (
+                                    <div className="space-y-2">
+                                        <textarea
+                                            value={editDescription}
+                                            onChange={(e) => setEditDescription(e.target.value)}
+                                            className="w-full min-h-[120px] rounded-md border p-3 text-sm"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={saveDescription}
+                                                disabled={isSaving}
+                                                className="flex-1 py-2 px-3 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-60"
+                                            >
+                                                {isSaving ? 'Saving...' : 'Save Description'}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setIsEditing(false);
+                                                    setEditDescription(course.description || '');
+                                                }}
+                                                className="flex-1 py-2 px-3 rounded-md border text-sm"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => setIsEditing(true)}
+                                        className="w-full py-2 px-3 rounded-md border text-sm hover:bg-muted"
+                                    >
+                                        Edit Description
+                                    </button>
+                                )}
+                                <button
+                                    onClick={deleteCourse}
+                                    disabled={isDeleting}
+                                    className="w-full py-2 px-3 rounded-md border border-red-500 text-red-600 text-sm hover:bg-red-50 disabled:opacity-60"
+                                >
+                                    {isDeleting ? 'Deleting...' : 'Delete Course'}
+                                </button>
+                            </div>
                         )}
 
                         {statusMessage && (
