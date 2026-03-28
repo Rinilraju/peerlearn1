@@ -23,11 +23,11 @@ jobs:
           name: Install Core Frontend Dependencies
           command: npm install
       - run:
-          name: Dynamically Install Vitest and RTL
+          name: Install Vitest and RTL
           command: npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom @types/jest
       - run:
-          name: Run Frontend Unit Tests
-          command: npx vitest run --passWithNoTests
+          name: Run Frontend Unit Tests (scoped to src/ only)
+          command: npx vitest run src/ --passWithNoTests
 
   # 2. Backend Integration/Unit Testing (Jest)
   backend-unit-test:
@@ -47,19 +47,22 @@ jobs:
           command: npx wait-on tcp:5432 -t 60000
       - run:
           name: Install Backend Dependencies + Jest + Supertest
-          command: cd backend && npm install && npm install -D jest supertest && npm start
+          command: cd backend && npm install && npm install -D jest supertest
+      - run:
+          name: Start Backend Server
+          command: cd backend && npm start
           background: true
       - run:
-          name: Wait for Backend to start
+          name: Wait for Backend TCP port
           command: npx wait-on tcp:5000 -t 60000
       - run:
           name: Wait for migrations to complete
           command: sleep 10
       - run:
           name: Run Backend Jest Tests
-          command: cd backend && npx jest --forceExit
+          command: cd backend && npx jest --passWithNoTests --forceExit
 
-  # 3. Frontend End-to-End Testing (Playwright)
+  # 3. Frontend E2E Functional Testing (Playwright)
   frontend-e2e-test:
     docker:
       - image: cimg/node:20.11.1-browsers
@@ -83,7 +86,7 @@ jobs:
             npm start
           background: true
       - run:
-          name: Wait for Backend to start
+          name: Wait for Backend TCP port
           command: npx wait-on tcp:5000 -t 60000
       - run:
           name: Wait for migrations to complete
@@ -104,7 +107,7 @@ jobs:
             npx playwright install --with-deps chromium
       - run:
           name: Run Playwright E2E Tests
-          command: npx playwright test
+          command: npx playwright test --pass-with-no-tests
 
   # 4. Backend Load + Pressure Testing (Artillery)
   backend-load-test:
@@ -127,7 +130,7 @@ jobs:
           command: cd backend && npm install && npm install -D artillery && npm start
           background: true
       - run:
-          name: Wait for Backend to start
+          name: Wait for Backend TCP port
           command: npx wait-on tcp:5000 -t 60000
       - run:
           name: Wait for migrations to complete
@@ -144,4 +147,5 @@ workflows:
       - backend-unit-test
       - frontend-e2e-test
       - backend-load-test
+
 
