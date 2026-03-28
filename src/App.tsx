@@ -8,6 +8,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { AdminLoginPage } from './pages/AdminLoginPage';
+import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { SignupPage } from './pages/SignupPage';
 
 // Private Pages
@@ -62,7 +63,8 @@ function App() {
                                 {/* Protected Routes */}
                                 <Route element={<ProtectedRoute />}>
                                     <Route element={<ProfileCheck />}>
-                                        <Route path="/dashboard" element={<DashboardPage />} />
+                                    <Route path="/dashboard" element={<DashboardPage />} />
+                                    <Route path="/admin" element={<AdminDashboardPage />} />
                                         <Route path="/create-course" element={<CreateCoursePage />} />
                                         <Route path="/sessions" element={<SessionsPage />} />
                                         <Route path="/session/:id" element={<VideoCallPage />} />

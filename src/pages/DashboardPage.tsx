@@ -139,6 +139,14 @@ export function DashboardPage() {
                     >
                         Sessions & Chat
                     </Link>
+                    {user?.role === 'admin' && (
+                        <Link
+                            to="/admin"
+                            className="inline-flex items-center px-4 py-2 border rounded-md hover:bg-muted transition-colors"
+                        >
+                            Admin Console
+                        </Link>
+                    )}
                     {(user?.role === 'tutor' || user?.role === 'admin' || user?.role === 'student') && (
                         <Link
                             to="/create-course"

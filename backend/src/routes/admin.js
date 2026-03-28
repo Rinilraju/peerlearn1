@@ -39,6 +39,44 @@ router.get('/reports', authenticateToken, requireAdmin, async (req, res) => {
     }
 });
 
+router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
+    const query = String(req.query.q || '').trim();
+    try {
+        const result = await db.query(
+            `SELECT id, name, email, role, username, is_suspended, created_at
+             FROM users
+             WHERE ($1 = '' OR name ILIKE $2 OR email ILIKE $2 OR username ILIKE $2)
+             ORDER BY created_at DESC
+             LIMIT 200`,
+            [query, `%${query}%`]
+        );
+        return res.json(result.rows);
+    } catch (error) {
+        console.error('Failed to fetch users for admin:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+router.get('/courses', authenticateToken, requireAdmin, async (req, res) => {
+    const query = String(req.query.q || '').trim();
+    try {
+        const result = await db.query(
+            `SELECT c.id, c.title, c.description, c.price, c.category, c.created_at,
+                    c.total_sessions, c.instructor_id, u.name AS instructor_name
+             FROM courses c
+             LEFT JOIN users u ON u.id = c.instructor_id
+             WHERE ($1 = '' OR c.title ILIKE $2 OR c.description ILIKE $2 OR c.category ILIKE $2)
+             ORDER BY c.created_at DESC
+             LIMIT 200`,
+            [query, `%${query}%`]
+        );
+        return res.json(result.rows);
+    } catch (error) {
+        console.error('Failed to fetch courses for admin:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
 router.patch('/reports/:id/resolve', authenticateToken, requireAdmin, async (req, res) => {
     const adminId = req.user.id;
     const { id } = req.params;
