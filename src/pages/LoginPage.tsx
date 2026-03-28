@@ -14,7 +14,13 @@ export function LoginPage() {
         setError('');
         try {
             await login(email, password);
-            navigate('/dashboard');
+            const stored = localStorage.getItem('user');
+            const parsed = stored ? JSON.parse(stored) : null;
+            if (parsed?.role === 'admin') {
+                navigate('/admin');
+            } else {
+                navigate('/dashboard');
+            }
         } catch (err) {
             setError('Invalid email or password');
         }
@@ -75,12 +81,6 @@ export function LoginPage() {
                     Don't have an account?{' '}
                     <Link to="/signup" className="text-primary hover:underline font-medium">
                         Sign up
-                    </Link>
-                </div>
-                <div className="text-center text-xs text-muted-foreground">
-                    Admin?{' '}
-                    <Link to="/admin-login" className="text-primary hover:underline font-medium">
-                        Use admin login
                     </Link>
                 </div>
             </div>
