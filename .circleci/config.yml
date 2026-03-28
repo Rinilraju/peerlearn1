@@ -1,0 +1,144 @@
+version: 2.1
+
+orbs:
+  node: circleci/node@5.1.0
+
+# Define reusable environments to easily share across jobs
+x-environments:
+  backend-env: &backend-env
+    DB_HOST: 127.0.0.1
+    DB_USER: postgres
+    DB_PASSWORD: 1234
+    DB_NAME: peerlearn
+    JWT_SECRET: your_test_jwt_secret
+    PORT: 5000
+
+jobs:
+  # 1. Frontend Component Testing
+  frontend-unit-test:
+    docker:
+      - image: cimg/node:20.11.1
+    steps:
+      - checkout
+      - run:
+          name: Install Core Frontend Dependencies
+          command: npm install
+      - run:
+          name: Dynamically Install Vitest and RTL
+          command: npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom @types/jest
+      - run:
+          name: Run Frontend Unit/Component Tests
+          command: npx vitest run
+
+  # 2. Frontend End-to-End Testing (Playwright)
+  frontend-e2e-test:
+    docker:
+      - image: cimg/node:20.11.1-browsers
+      - image: cimg/postgres:14.0
+        environment:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: peerlearn
+          POSTGRES_PASSWORD: 1234
+    environment:
+      <<: *backend-env
+    steps:
+      - checkout
+      - run:
+          name: Dynamic setup for Wait-on utility
+          command: npm install -g wait-on
+      - run:
+          name: Install Backend Dependencies & Start Server
+          command: |
+             cd backend
+             npm install
+             npm start
+          background: true
+      - run:
+          name: Wait for Database and Backend
+          command: wait-on http://127.0.0.1:5000/health
+      - run:
+          name: Install Frontend Dependencies & Start App
+          command: |
+             npm install
+             npm run dev
+          background: true
+      - run:
+          name: Wait for Frontend
+          command: wait-on http://127.0.0.1:5173
+      - run:
+          name: Dynamically Install and Setup Playwright
+          command: |
+             npm install -D @playwright/test
+             npx playwright install --with-deps
+      - run:
+          name: Run Playwright E2E Tests
+          command: npx playwright test
+
+  # 3. Backend Integration/Unit Testing (Jest)
+  backend-unit-test:
+    docker:
+      - image: cimg/node:20.11.1
+      - image: cimg/postgres:14.0
+        environment:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: peerlearn
+          POSTGRES_PASSWORD: 1234
+    environment:
+      <<: *backend-env
+    steps:
+      - checkout
+      - run:
+          name: Install Backend Dependencies
+          command: cd backend && npm install
+      - run:
+          name: Dynamically Install Jest & Supertest
+          command: cd backend && npm install -D jest supertest wait-on
+      - run:
+          name: Start Backend for Health check mock testing
+          command: cd backend && npm start
+          background: true
+      - run:
+          name: Wait for Backend
+          command: cd backend && npx wait-on http://127.0.0.1:5000/health
+      - run:
+          name: Run Backend Jest Tests
+          command: cd backend && npx jest
+
+  # 4. Backend Load Testing (Artillery)
+  backend-load-test:
+    docker:
+      - image: cimg/node:20.11.1
+      - image: cimg/postgres:14.0
+        environment:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: peerlearn
+          POSTGRES_PASSWORD: 1234
+    environment:
+      <<: *backend-env
+    steps:
+      - checkout
+      - run:
+          name: Install Backend Dependencies
+          command: cd backend && npm install
+      - run:
+          name: Dynamically Install Artillery
+          command: cd backend && npm install -D artillery wait-on
+      - run:
+          name: Start Backend For Stress Testing
+          command: cd backend && npm start
+          background: true
+      - run:
+          name: Wait for Backend Startup
+          command: cd backend && npx wait-on http://127.0.0.1:5000/health
+      - run:
+          name: Run Artillery Sustained Load Tests
+          command: cd backend && npx artillery run load-tester.yml
+
+workflows:
+  version: 2
+  full-suite-tests:
+    jobs:
+      - frontend-unit-test
+      - backend-unit-test
+      - backend-load-test
+      - frontend-e2e-test
