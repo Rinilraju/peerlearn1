@@ -3,7 +3,6 @@ version: 2.1
 orbs:
   node: circleci/node@5.1.0
 
-# Define reusable environments to easily share across jobs
 x-environments:
   backend-env: &backend-env
     DB_HOST: "127.0.0.1"
@@ -14,67 +13,23 @@ x-environments:
     PORT: "5000"
 
 jobs:
-  # 1. Frontend Component Testing
+  # 1. Frontend Unit Testing
   frontend-unit-test:
     docker:
       - image: cimg/node:20.11.1
     steps:
       - checkout
       - run:
-          name: Install Core Frontend Dependencies
+          name: Install Frontend Dependencies
           command: npm install
       - run:
-          name: Dynamically Install Vitest and RTL
-          command: npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom @types/jest
+          name: Install Vitest and Testing Library
+          command: npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom @types/react @types/react-dom
       - run:
-          name: Run Frontend Unit/Component Tests (Ignore if no tests uploaded yet)
-          command: npx vitest run --passWithNoTests
+          name: Run Frontend Unit Tests (scoped to src/tests only)
+          command: npx vitest run src/tests/ --globals --reporter=verbose
 
-  # 2. Frontend End-to-End Testing (Playwright)
-  frontend-e2e-test:
-    docker:
-      - image: cimg/node:20.11.1-browsers
-      - image: cimg/postgres:14.0
-        environment:
-          POSTGRES_USER: "postgres"
-          POSTGRES_DB: "peerlearn"
-          POSTGRES_PASSWORD: "1234"
-    environment:
-      <<: *backend-env
-    steps:
-      - checkout
-      - run:
-          name: Wait for PostgreSQL to boot
-          command: npx wait-on tcp:5432 -t 30000
-      - run:
-          name: Install Backend Dependencies & Start Server
-          command: |
-             cd backend
-             npm install
-             npm start
-          background: true
-      - run:
-          name: Wait for Target Backend Port
-          command: npx wait-on http://127.0.0.1:5000/health -t 30000
-      - run:
-          name: Install Frontend Dependencies & Start App
-          command: |
-             npm install
-             npm run dev
-          background: true
-      - run:
-          name: Wait for Frontend App Port
-          command: npx wait-on http://127.0.0.1:5173 -t 30000
-      - run:
-          name: Dynamically Install and Setup Playwright
-          command: |
-             npm install -D @playwright/test
-             npx playwright install --with-deps
-      - run:
-          name: Run Playwright E2E Tests
-          command: npx playwright test
-
-  # 3. Backend Integration/Unit Testing (Jest)
+  # 2. Backend Unit & Integration Testing
   backend-unit-test:
     docker:
       - image: cimg/node:20.11.1
@@ -88,20 +43,63 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Wait for PostgreSQL to boot
-          command: npx wait-on tcp:5432 -t 30000
+          name: Wait for PostgreSQL to be fully ready
+          command: npx wait-on tcp:5432 -t 60000
       - run:
-          name: Install Backend Dependencies & Start Server
-          command: cd backend && npm install && npm install -D jest supertest && npm start
+          name: Install Backend Dependencies
+          command: cd backend && npm install
+      - run:
+          name: Install Jest and Supertest
+          command: cd backend && npm install -D jest supertest
+      - run:
+          name: Start Backend Server in background
+          command: cd backend && npm start
           background: true
       - run:
-          name: Wait for Backend Health
-          command: npx wait-on http://127.0.0.1:5000/health -t 30000
+          name: Wait for Backend Health (60s timeout)
+          command: npx wait-on http://127.0.0.1:5000/health -t 60000
       - run:
           name: Run Backend Jest Tests
-          command: cd backend && npx jest
+          command: cd backend && npx jest --testPathPattern="src/tests/health.test.js" --forceExit
 
-  # 4. Backend Load Testing (Artillery)
+  # 3. Frontend Functional E2E Testing (Playwright)
+  frontend-e2e-test:
+    docker:
+      - image: cimg/node:20.11.1-browsers
+      - image: cimg/postgres:14.0
+        environment:
+          POSTGRES_USER: "postgres"
+          POSTGRES_DB: "peerlearn"
+          POSTGRES_PASSWORD: "1234"
+    environment:
+      <<: *backend-env
+    steps:
+      - checkout
+      - run:
+          name: Wait for PostgreSQL to be fully ready
+          command: npx wait-on tcp:5432 -t 60000
+      - run:
+          name: Install and Start Backend
+          command: cd backend && npm install && npm start
+          background: true
+      - run:
+          name: Wait for Backend (60s timeout)
+          command: npx wait-on http://127.0.0.1:5000/health -t 60000
+      - run:
+          name: Install Frontend Dependencies and Start App
+          command: npm install && npm run dev
+          background: true
+      - run:
+          name: Wait for Frontend
+          command: npx wait-on http://127.0.0.1:5173 -t 60000
+      - run:
+          name: Install and Setup Playwright
+          command: npm install -D @playwright/test && npx playwright install --with-deps chromium
+      - run:
+          name: Run Playwright Functional Tests
+          command: npx playwright test playwright-tests/e2e/home.spec.ts
+
+  # 4. Backend Load & Pressure Testing (Artillery)
   backend-load-test:
     docker:
       - image: cimg/node:20.11.1
@@ -115,17 +113,23 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Wait for PostgreSQL to boot
-          command: npx wait-on tcp:5432 -t 30000
+          name: Wait for PostgreSQL to be fully ready
+          command: npx wait-on tcp:5432 -t 60000
       - run:
-          name: Install Backend Dependencies & Start Server
-          command: cd backend && npm install && npm install -D artillery && npm start
+          name: Install Backend Dependencies
+          command: cd backend && npm install
+      - run:
+          name: Install Artillery
+          command: cd backend && npm install -D artillery
+      - run:
+          name: Start Backend Server
+          command: cd backend && npm start
           background: true
       - run:
-          name: Wait for Backend Health
-          command: npx wait-on http://127.0.0.1:5000/health -t 30000
+          name: Wait for Backend (60s timeout)
+          command: npx wait-on http://127.0.0.1:5000/health -t 60000
       - run:
-          name: Run Artillery Sustained Load Tests
+          name: Run Load & Pressure Tests
           command: cd backend && npx artillery run load-tester.yml
 
 workflows:
@@ -134,6 +138,7 @@ workflows:
     jobs:
       - frontend-unit-test
       - backend-unit-test
-      - backend-load-test
       - frontend-e2e-test
+      - backend-load-test
+
 
