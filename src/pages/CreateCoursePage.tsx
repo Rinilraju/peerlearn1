@@ -30,7 +30,6 @@ export function CreateCoursePage() {
         description: '',
         price: '',
         category: 'Development',
-        video_url: '',
         thumbnail: '',
         total_sessions: '1'
     });
@@ -379,28 +378,8 @@ export function CreateCoursePage() {
                 </div>
 
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">Video URL (Optional)</label>
-                    <input
-                        type="url"
-                        name="video_url"
-                        value={formData.video_url}
-                        onChange={handleChange}
-                        className="w-full h-10 px-3 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder="https://youtube.com/..."
-                    />
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-sm font-medium">Course Thumbnail URL (Optional)</label>
-                    <input
-                        type="url"
-                        name="thumbnail"
-                        value={formData.thumbnail}
-                        onChange={handleChange}
-                        className="w-full h-10 px-3 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder="https://example.com/image.jpg"
-                    />
-                    <div className="text-xs text-muted-foreground">Or upload an image file:</div>
+                    <label className="text-sm font-medium">Course Thumbnail (Upload)</label>
+                    <div className="text-xs text-muted-foreground">Upload an image file:</div>
                     <input
                         type="file"
                         accept="image/*"
