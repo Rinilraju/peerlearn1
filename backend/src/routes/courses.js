@@ -736,6 +736,11 @@ router.post('/', authenticateToken, async (req, res) => {
             return res.status(403).json({ message: 'Course verification quiz not passed.' });
         }
 
+        const numericPrice = Number(price || 0);
+        if (!Number.isFinite(numericPrice) || numericPrice < 100) {
+            return res.status(400).json({ message: 'Course price must be at least ₹100.' });
+        }
+
         const totalSessions = Number(total_sessions || 1);
         if (!Number.isInteger(totalSessions) || totalSessions < 1 || totalSessions > 200) {
             return res.status(400).json({ message: 'total_sessions must be between 1 and 200.' });
@@ -744,7 +749,7 @@ router.post('/', authenticateToken, async (req, res) => {
         console.log('Creating course with data:', { title, price, category, instructor_id, totalSessions });
         const result = await db.query(
             'INSERT INTO courses (title, description, price, category, instructor_id, video_url, thumbnail, total_sessions) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-            [safeTitle, safeDescription, price, category, instructor_id, video_url, thumbnail, totalSessions]
+            [safeTitle, safeDescription, numericPrice, category, instructor_id, video_url, thumbnail, totalSessions]
         );
         await db.query(
             `UPDATE users

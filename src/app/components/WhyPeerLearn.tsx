@@ -1,4 +1,4 @@
-import { Users, DollarSign, Target, Calendar } from 'lucide-react';
+import { Users, IndianRupee, Target, Calendar } from 'lucide-react';
 
 const features = [
   {
@@ -7,7 +7,7 @@ const features = [
     description: 'Learn directly from experienced peers who understand your journey and challenges.',
   },
   {
-    icon: DollarSign,
+    icon: IndianRupee,
     title: 'Affordable Education',
     description: 'Access quality education at a fraction of traditional tutoring costs.',
   },

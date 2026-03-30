@@ -32,6 +32,41 @@ router.get('/search', authenticateToken, async (req, res) => {
     }
 });
 
+router.get('/me/earnings', authenticateToken, async (req, res) => {
+    const instructorId = req.user.id;
+    const commissionRate = 0.02;
+    try {
+        const result = await db.query(
+            `SELECT
+                COALESCE(SUM(CASE WHEN p.status IN ('paid', 'completed') THEN p.amount ELSE 0 END), 0) AS earned_gross,
+                COALESCE(SUM(CASE WHEN p.status = 'pending' THEN p.amount ELSE 0 END), 0) AS pending_amount,
+                COALESCE(SUM(CASE WHEN p.status = 'refunded' THEN p.amount ELSE 0 END), 0) AS refunded_amount
+             FROM payments p
+             INNER JOIN courses c ON c.id = p.course_id
+             WHERE c.instructor_id = $1`,
+            [instructorId]
+        );
+        const earnedGross = Number(result.rows[0]?.earned_gross || 0);
+        const pendingAmount = Number(result.rows[0]?.pending_amount || 0);
+        const refundedAmount = Number(result.rows[0]?.refunded_amount || 0);
+        const commissionAmount = earnedGross * commissionRate;
+        const netEarnings = Math.max(0, earnedGross - commissionAmount);
+
+        return res.json({
+            currency: 'INR',
+            commissionRate,
+            earnedGross,
+            pendingAmount,
+            refundedAmount,
+            commissionAmount,
+            netEarnings,
+        });
+    } catch (error) {
+        console.error('Failed to fetch tutor earnings:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
 router.get('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {

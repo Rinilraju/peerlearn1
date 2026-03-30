@@ -23,6 +23,7 @@ export function CreateCoursePage() {
     const [copyCount, setCopyCount] = useState(0);
     const [thumbnailUploading, setThumbnailUploading] = useState(false);
     const [thumbnailError, setThumbnailError] = useState('');
+    const [priceError, setPriceError] = useState('');
 
     const [formData, setFormData] = useState({
         title: '',
@@ -132,6 +133,12 @@ export function CreateCoursePage() {
 
     const startQuiz = async (e: React.FormEvent) => {
         e.preventDefault();
+        const numericPrice = parseFloat(formData.price);
+        if (!Number.isFinite(numericPrice) || numericPrice < 100) {
+            setPriceError('Course price must be at least ₹100.');
+            return;
+        }
+        setPriceError('');
         setQuizLoading(true);
         setQuizStatus('');
         try {
@@ -318,17 +325,26 @@ export function CreateCoursePage() {
 
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Price ($)</label>
+                        <label className="text-sm font-medium">Price (₹)</label>
                         <input
                             type="number"
                             name="price"
-                            min="0"
+                            min="100"
                             step="0.01"
                             value={formData.price}
-                            onChange={handleChange}
+                            onChange={(e) => {
+                                handleChange(e);
+                                if (priceError) {
+                                    setPriceError('');
+                                }
+                            }}
                             className="w-full h-10 px-3 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            placeholder="0.00"
+                            placeholder="0"
                         />
+                        <div className="text-xs text-muted-foreground">
+                            Minimum price: ₹100. Platform commission: 2% (₹{Math.max(0, Math.round((parseFloat(formData.price) || 0) * 0.02))}).
+                        </div>
+                        {priceError && <div className="text-xs text-red-500">{priceError}</div>}
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Category</label>

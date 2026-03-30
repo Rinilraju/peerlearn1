@@ -1,0 +1,54 @@
+version: 2.1
+
+orbs:
+  node: circleci/node@5.1.0
+
+jobs:
+  frontend-build:
+    docker:
+      - image: cimg/node:20.11
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - node/install-packages:
+          pkg-manager: npm
+      - run:
+          name: Frontend build
+          command: npm run build
+
+  backend-check:
+    docker:
+      - image: cimg/node:20.11
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - node/install-packages:
+          pkg-manager: npm
+          app-dir: backend
+      - run:
+          name: Backend syntax check
+          command: |
+            cd backend
+            node -e "require('./src/server'); console.log('backend ok')"
+
+  migrations-check:
+    docker:
+      - image: cimg/node:20.11
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - node/install-packages:
+          pkg-manager: npm
+          app-dir: backend
+      - run:
+          name: Migration module check
+          command: |
+            cd backend
+            node -e "require('./src/migrations'); console.log('migrations module ok')"
+
+workflows:
+  build:
+    jobs:
+      - frontend-build
+      - backend-check
+      - migrations-check

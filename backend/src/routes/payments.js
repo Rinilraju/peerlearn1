@@ -48,7 +48,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
         if (simulatePayments || !stripe) {
             const paymentResult = await db.query(
                 `INSERT INTO payments (user_id, course_id, amount, currency, provider, provider_session_id, status)
-                 VALUES ($1, $2, $3, 'usd', 'simulated', $4, 'paid')
+                 VALUES ($1, $2, $3, 'inr', 'simulated', $4, 'paid')
                  RETURNING id`,
                 [userId, course.id, Number(course.price || 0), `sim-${Date.now()}-${userId}`]
             );
@@ -70,7 +70,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
             line_items: [
                 {
                     price_data: {
-                        currency: 'usd',
+                        currency: 'inr',
                         product_data: {
                             name: course.title,
                             description: course.description || 'PeerLearn course enrollment',
@@ -90,7 +90,7 @@ router.post('/create-checkout-session', authenticateToken, async (req, res) => {
 
         const paymentResult = await db.query(
             `INSERT INTO payments (user_id, course_id, amount, currency, provider, provider_session_id, status)
-             VALUES ($1, $2, $3, 'usd', 'stripe', $4, 'pending')
+             VALUES ($1, $2, $3, 'inr', 'stripe', $4, 'pending')
              RETURNING id`,
             [userId, course.id, Number(course.price || 0), session.id]
         );

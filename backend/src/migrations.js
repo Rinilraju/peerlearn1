@@ -226,11 +226,16 @@ async function runMigrations() {
                 topic VARCHAR(255) NOT NULL,
                 message TEXT,
                 preferred_time TIMESTAMP,
+                offered_price_inr NUMERIC(10, 2),
+                scheduled_session_id INTEGER REFERENCES course_sessions(id) ON DELETE SET NULL,
                 status VARCHAR(30) NOT NULL DEFAULT 'pending',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 responded_at TIMESTAMP
             );
         `);
+
+        await db.query(`ALTER TABLE class_requests ADD COLUMN IF NOT EXISTS offered_price_inr NUMERIC(10, 2);`);
+        await db.query(`ALTER TABLE class_requests ADD COLUMN IF NOT EXISTS scheduled_session_id INTEGER REFERENCES course_sessions(id) ON DELETE SET NULL;`);
 
         await db.query(`
             CREATE INDEX IF NOT EXISTS idx_class_requests_tutor_status

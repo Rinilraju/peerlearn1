@@ -14,6 +14,16 @@ type UserProfile = {
     education_qualification?: string;
 };
 
+type EarningsSummary = {
+    currency: string;
+    commissionRate: number;
+    earnedGross: number;
+    pendingAmount: number;
+    refundedAmount: number;
+    commissionAmount: number;
+    netEarnings: number;
+};
+
 export function UserProfilePage() {
     const { id } = useParams<{ id: string }>();
     const { user } = useAuth();
@@ -22,7 +32,9 @@ export function UserProfilePage() {
     const [topic, setTopic] = useState('');
     const [message, setMessage] = useState('');
     const [preferredTime, setPreferredTime] = useState('');
+    const [offeredPrice, setOfferedPrice] = useState('');
     const [status, setStatus] = useState('');
+    const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
 
     useEffect(() => {
         if (!id) return;
@@ -34,6 +46,19 @@ export function UserProfilePage() {
             })
             .finally(() => setLoading(false));
     }, [id]);
+
+    useEffect(() => {
+        if (!profile) return;
+        const isSelf = Number(profile.id) === Number(user?.id);
+        const isTutor = profile.role === 'tutor' || profile.role === 'admin';
+        if (!isSelf || !isTutor) {
+            setEarnings(null);
+            return;
+        }
+        api.get('/users/me/earnings')
+            .then((res) => setEarnings(res.data))
+            .catch(() => setEarnings(null));
+    }, [profile, user?.id]);
 
     const sendClassRequest = async () => {
         if (!profile) return;
@@ -47,11 +72,13 @@ export function UserProfilePage() {
                 topic: topic.trim(),
                 message: message.trim(),
                 preferredTime: preferredTime || null,
+                offeredPriceInr: offeredPrice ? Number(offeredPrice) : null,
             });
-            setStatus('Class request sent. The tutor has been prompted to open the create course page.');
+            setStatus('Class request sent. The tutor can now accept and schedule a session.');
             setTopic('');
             setMessage('');
             setPreferredTime('');
+            setOfferedPrice('');
         } catch (error: any) {
             setStatus(error?.response?.data?.message || 'Failed to send class request.');
         }
@@ -67,6 +94,8 @@ export function UserProfilePage() {
 
     const isSelf = Number(profile.id) === Number(user?.id);
     const canRequest = !isSelf;
+    const formatMoney = (value: number) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Number(value || 0));
+    const showEarnings = isSelf && (profile.role === 'tutor' || profile.role === 'admin');
 
     return (
         <div className="container mx-auto px-4 py-8 max-w-3xl space-y-6">
@@ -93,6 +122,36 @@ export function UserProfilePage() {
                 )}
             </div>
 
+            {showEarnings && (
+                <div className="rounded-lg border p-6 bg-card space-y-4">
+                    <div>
+                        <h2 className="text-xl font-semibold">Tutor Earnings Dashboard</h2>
+                        <p className="text-xs text-muted-foreground">Commission: {(earnings?.commissionRate ?? 0.02) * 100}% on paid enrollments.</p>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                        <div className="p-3 rounded-md border bg-muted/20">
+                            <div className="text-xs text-muted-foreground">Total Earned (Gross)</div>
+                            <div className="text-lg font-semibold">₹{formatMoney(earnings?.earnedGross || 0)}</div>
+                        </div>
+                        <div className="p-3 rounded-md border bg-muted/20">
+                            <div className="text-xs text-muted-foreground">Pending Payout</div>
+                            <div className="text-lg font-semibold">₹{formatMoney(earnings?.pendingAmount || 0)}</div>
+                        </div>
+                        <div className="p-3 rounded-md border bg-muted/20">
+                            <div className="text-xs text-muted-foreground">Commission (2%)</div>
+                            <div className="text-lg font-semibold">₹{formatMoney(earnings?.commissionAmount || 0)}</div>
+                        </div>
+                        <div className="p-3 rounded-md border bg-muted/20">
+                            <div className="text-xs text-muted-foreground">Net Earnings</div>
+                            <div className="text-lg font-semibold">₹{formatMoney(earnings?.netEarnings || 0)}</div>
+                        </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                        Refunded: ₹{formatMoney(earnings?.refundedAmount || 0)}
+                    </div>
+                </div>
+            )}
+
             {canRequest && (
                 <div className="rounded-lg border p-6 bg-card space-y-3">
                     <h2 className="text-xl font-semibold">Request a Class</h2>
@@ -107,6 +166,15 @@ export function UserProfilePage() {
                         type="datetime-local"
                         value={preferredTime}
                         onChange={(e) => setPreferredTime(e.target.value)}
+                        className="w-full h-10 px-3 rounded-md border bg-background"
+                    />
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={offeredPrice}
+                        onChange={(e) => setOfferedPrice(e.target.value)}
+                        placeholder="Your budget (₹)"
                         className="w-full h-10 px-3 rounded-md border bg-background"
                     />
                     <textarea

@@ -7,6 +7,7 @@ interface CourseCardProps {
 }
 
 export function CourseCard({ course }: CourseCardProps) {
+    const priceInr = Math.round(Number(course.price || 0) || 0);
     return (
         <Link to={`/courses/${course.id}`} className="block group">
             <div className="border rounded-lg overflow-hidden bg-card hover:shadow-lg transition-shadow">
@@ -22,7 +23,7 @@ export function CourseCard({ course }: CourseCardProps) {
                         <h3 className="font-semibold truncate pr-2 group-hover:text-primary transition-colors">
                             {course.title}
                         </h3>
-                        <span className="font-bold text-primary">${course.price}</span>
+                        <span className="font-bold text-primary">₹{priceInr}</span>
                     </div>
 
                     <div className="flex items-center gap-2 text-xs">

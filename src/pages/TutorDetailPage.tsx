@@ -40,6 +40,7 @@ export function TutorDetailPage() {
     const [topic, setTopic] = useState('');
     const [message, setMessage] = useState('');
     const [preferredTime, setPreferredTime] = useState('');
+    const [offeredPrice, setOfferedPrice] = useState('');
     const [status, setStatus] = useState('');
     const [reviewRating, setReviewRating] = useState('5');
     const [reviewComment, setReviewComment] = useState('');
@@ -81,11 +82,13 @@ export function TutorDetailPage() {
                 topic: topic.trim(),
                 message: message.trim(),
                 preferredTime: preferredTime || null,
+                offeredPriceInr: offeredPrice ? Number(offeredPrice) : null,
             });
-            setStatus('Class request sent. The tutor has been prompted to open the create course page.');
+            setStatus('Class request sent. The tutor can now accept and schedule a session.');
             setTopic('');
             setMessage('');
             setPreferredTime('');
+            setOfferedPrice('');
         } catch (error: any) {
             setStatus(error?.response?.data?.message || 'Failed to send class request.');
         }
@@ -142,6 +145,15 @@ export function TutorDetailPage() {
                         type="datetime-local"
                         value={preferredTime}
                         onChange={(e) => setPreferredTime(e.target.value)}
+                        className="w-full h-10 px-3 rounded-md border bg-background"
+                    />
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={offeredPrice}
+                        onChange={(e) => setOfferedPrice(e.target.value)}
+                        placeholder="Your budget (₹)"
                         className="w-full h-10 px-3 rounded-md border bg-background"
                     />
                     <textarea

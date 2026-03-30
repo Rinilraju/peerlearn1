@@ -19,6 +19,8 @@ type ClassRequest = {
     topic: string;
     message?: string;
     preferred_time?: string;
+    offered_price_inr?: number | string | null;
+    scheduled_session_id?: number | null;
     status: 'pending' | 'accepted' | 'rejected';
     created_at: string;
     requester_name?: string;
@@ -39,6 +41,8 @@ export function DashboardPage() {
     const [incomingRequests, setIncomingRequests] = useState<ClassRequest[]>([]);
     const [outgoingRequests, setOutgoingRequests] = useState<ClassRequest[]>([]);
     const [requestStatus, setRequestStatus] = useState('');
+    const [requestScheduleCourseId, setRequestScheduleCourseId] = useState<Record<number, string>>({});
+    const [requestScheduleTime, setRequestScheduleTime] = useState<Record<number, string>>({});
 
     const mapCourse = (course: any) => ({
         ...course,
@@ -123,6 +127,35 @@ export function DashboardPage() {
             setRequestStatus(`Request ${status}.`);
         } catch (error: any) {
             setRequestStatus(error?.response?.data?.message || 'Failed to update request.');
+        }
+    };
+
+    const scheduleRequestSession = async (request: ClassRequest) => {
+        const courseId = requestScheduleCourseId[request.id];
+        const scheduledAt = requestScheduleTime[request.id];
+        if (!courseId || !scheduledAt) {
+            setRequestStatus('Select a course and time to schedule this request.');
+            return;
+        }
+        const scheduledDate = new Date(scheduledAt);
+        if (Number.isNaN(scheduledDate.getTime())) {
+            setRequestStatus('Invalid schedule time.');
+            return;
+        }
+        try {
+            const res = await api.post(`/class-requests/${request.id}/schedule`, {
+                courseId: Number(courseId),
+                scheduledAt: scheduledDate.toISOString(),
+                durationMinutes: 60,
+            });
+            setIncomingRequests((prev) => prev.map((item) => (
+                item.id === request.id
+                    ? { ...item, status: 'accepted', scheduled_session_id: res.data?.session?.id || item.scheduled_session_id }
+                    : item
+            )));
+            setRequestStatus('Session scheduled and student notified.');
+        } catch (error: any) {
+            setRequestStatus(error?.response?.data?.message || 'Failed to schedule session for this request.');
         }
     };
 
@@ -315,12 +348,47 @@ export function DashboardPage() {
                                             <div key={request.id} className="p-3 border rounded bg-card space-y-1">
                                                 <div className="text-sm font-medium">{request.requester_username || request.requester_name}</div>
                                                 <div className="text-xs text-muted-foreground">{request.topic}</div>
+                                                {request.offered_price_inr !== null && request.offered_price_inr !== undefined && (
+                                                    <div className="text-xs">Budget: ₹{Number(request.offered_price_inr).toFixed(0)}</div>
+                                                )}
                                                 {request.message && <div className="text-xs">{request.message}</div>}
+                                                {request.preferred_time && (
+                                                    <div className="text-xs text-muted-foreground">Preferred: {new Date(request.preferred_time).toLocaleString()}</div>
+                                                )}
                                                 <div className="text-xs capitalize">Status: {request.status}</div>
                                                 {request.status === 'pending' && (
                                                     <div className="flex gap-2 pt-1">
                                                         <button onClick={() => updateRequestStatus(request.id, 'accepted')} className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground">Accept</button>
                                                         <button onClick={() => updateRequestStatus(request.id, 'rejected')} className="text-xs px-2 py-1 rounded border">Reject</button>
+                                                    </div>
+                                                )}
+                                                {(request.status === 'accepted' && !request.scheduled_session_id) && (
+                                                    <div className="pt-2 space-y-2">
+                                                        <div className="grid grid-cols-1 gap-2">
+                                                            <select
+                                                                className="h-9 px-2 rounded-md border bg-background text-xs"
+                                                                value={requestScheduleCourseId[request.id] || ''}
+                                                                onChange={(e) => setRequestScheduleCourseId((prev) => ({ ...prev, [request.id]: e.target.value }))}
+                                                            >
+                                                                <option value="">Select course</option>
+                                                                {myCourses.map((course) => (
+                                                                    <option key={course.id} value={course.id}>{course.title}</option>
+                                                                ))}
+                                                            </select>
+                                                            <input
+                                                                type="datetime-local"
+                                                                min={new Date(Date.now() + 60 * 1000).toISOString().slice(0, 16)}
+                                                                className="h-9 px-2 rounded-md border bg-background text-xs"
+                                                                value={requestScheduleTime[request.id] || ''}
+                                                                onChange={(e) => setRequestScheduleTime((prev) => ({ ...prev, [request.id]: e.target.value }))}
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            onClick={() => scheduleRequestSession(request)}
+                                                            className="text-xs px-2 py-1 rounded bg-emerald-600 text-white"
+                                                        >
+                                                            Schedule Session
+                                                        </button>
                                                     </div>
                                                 )}
                                             </div>
@@ -338,6 +406,9 @@ export function DashboardPage() {
                                             <div key={request.id} className="p-3 border rounded bg-card">
                                                 <div className="text-sm font-medium">{request.tutor_username || request.tutor_name}</div>
                                                 <div className="text-xs text-muted-foreground">{request.topic}</div>
+                                                {request.offered_price_inr !== null && request.offered_price_inr !== undefined && (
+                                                    <div className="text-xs">Budget: ₹{Number(request.offered_price_inr).toFixed(0)}</div>
+                                                )}
                                                 <div className="text-xs capitalize">Status: {request.status}</div>
                                             </div>
                                         ))}

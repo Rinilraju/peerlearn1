@@ -257,7 +257,7 @@ export function CourseDetailPage() {
     const isOwner = course?.instructor_id && Number(course.instructor_id) === Number(user?.id);
     const isAdmin = user?.role === 'admin';
     const canManageCourse = Boolean(isOwner || isAdmin);
-    const price = parseFloat(String(course.price || 0)) || 0;
+    const priceInr = Math.round(parseFloat(String(course.price || 0)) || 0);
     const image = course.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200&auto=format&fit=crop&q=60';
     const learnItems = String(course.description || '')
         .split(/\n|•|-/)
@@ -373,9 +373,9 @@ export function CourseDetailPage() {
                 </div>
 
                 <div className="lg:col-span-1">
-                    <div className="sticky top-24 p-6 rounded-lg border bg-card shadow-sm space-y-6">
+                        <div className="sticky top-24 p-6 rounded-lg border bg-card shadow-sm space-y-6">
                         <div className="flex justify-between items-center">
-                            <span className="text-3xl font-bold">${price.toFixed(2)}</span>
+                            <span className="text-3xl font-bold">₹{priceInr.toFixed(0)}</span>
                             <div className="flex space-x-2">
                                 <button className="p-2 rounded-full hover:bg-muted transition-colors">
                                     <Share2 className="h-5 w-5 text-muted-foreground" />
